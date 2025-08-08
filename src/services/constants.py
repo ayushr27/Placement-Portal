@@ -12,3 +12,7 @@ Please login and update your password.
 Regards,
 Training and Placement Cell, IIITDM Kurnool
 """
+ACCOUNT_CREATION_EMAIL_FROM_NAME = "Training and Placement Cell IIITDM Kurnool"
+ACCOUNT_CREATION_EMAIL_SERVER = "smtp.gmail.com"
+ACCOUNT_CREATION_EMAIL_PORT = 587
+ACCOUNT_CREATION_EMAIL_FROM = "dhruvsing2003@gmail.com"

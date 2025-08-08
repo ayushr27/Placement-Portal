@@ -3,6 +3,12 @@ import string
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 
 from src.config import secrets
+from src.services.constants import (
+    ACCOUNT_CREATION_EMAIL_FROM_NAME,
+    ACCOUNT_CREATION_EMAIL_SERVER,
+    ACCOUNT_CREATION_EMAIL_PORT,
+    ACCOUNT_CREATION_EMAIL_FROM
+)
 
 
 def generate_random_password(length: int = 10) -> str:
@@ -36,14 +42,14 @@ async def send_email_to_student(email: str, subject: str, body: str) -> None:
         conf = ConnectionConfig(
             MAIL_USERNAME=secrets.MAIL_USERNAME,
             MAIL_PASSWORD=secrets.MAIL_PASSWORD,
-            MAIL_FROM=secrets.MAIL_FROM,
-            MAIL_PORT=secrets.MAIL_PORT,
-            MAIL_SERVER=secrets.MAIL_SERVER,
-            MAIL_FROM_NAME=getattr(secrets, "MAIL_FROM_NAME", "Admin Team"),
-            MAIL_STARTTLS=secrets.MAIL_STARTTLS,
-            MAIL_SSL_TLS=secrets.MAIL_SSL_TLS,
-            USE_CREDENTIALS=secrets.USE_CREDENTIALS,
-            VALIDATE_CERTS=secrets.VALIDATE_CERTS,
+            MAIL_FROM=ACCOUNT_CREATION_EMAIL_FROM,
+            MAIL_PORT=ACCOUNT_CREATION_EMAIL_PORT,
+            MAIL_SERVER=ACCOUNT_CREATION_EMAIL_SERVER,
+            MAIL_FROM_NAME=ACCOUNT_CREATION_EMAIL_FROM_NAME,
+            MAIL_STARTTLS=True,
+            MAIL_SSL_TLS=False,
+            USE_CREDENTIALS=True,
+            VALIDATE_CERTS=True,
         )
 
         message = MessageSchema(
