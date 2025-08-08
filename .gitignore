@@ -1,3 +1,2 @@
-__pycache__
-placement-portal/
-.env
+__pycache__/
+.pytest_cache/
