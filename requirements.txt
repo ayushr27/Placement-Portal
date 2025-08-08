@@ -1,6 +1,13 @@
 fastapi
-flake8
 uvicorn
 gunicorn
-pytest
-httpx
+motor
+pymongo
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+pydantic
+pydantic-settings
+email-validator
+python-dotenv
+fastapi-mail

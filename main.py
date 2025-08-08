@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from starlette.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-
+from src.routes.register import router as student_router
+from src.routes.auth import router as auth_router
+from src.routes.profile import router as profile_router
 app = FastAPI()
 
 app.add_middleware(
@@ -14,10 +16,12 @@ app.add_middleware(
 )
 
 
+app.include_router(auth_router)
+app.include_router(student_router)
+app.include_router(profile_router)
 @app.get("/", tags=["default"])
 async def index():
     return RedirectResponse(url="/docs")
-
 
 @app.get("/health", include_in_schema=False)
 async def health_check():
