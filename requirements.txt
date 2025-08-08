@@ -13,3 +13,4 @@ python-dotenv
 fastapi-mail
 pytest-asyncio
 pytest-mock
+httpx
