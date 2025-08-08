@@ -1,10 +1,10 @@
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-class Settings(BaseSettings):
+
+class Secrets(BaseSettings):
     MONGODB_URL: str
-    DATABASE_NAME: str 
-    JWT_HASH_KEY: str  
+    DATABASE_NAME: str
+    JWT_HASH_KEY: str
     MAIL_USERNAME: str
     MAIL_PASSWORD: str
     MAIL_FROM: str
@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     USE_CREDENTIALS: bool
     VALIDATE_CERTS: bool
 
-
     model_config = SettingsConfigDict(env_file=".env")
-settings = Settings()
+
+
+secrets = Secrets()

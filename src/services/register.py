@@ -4,14 +4,36 @@ import random
 import string
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from fastapi import HTTPException
-from src.services.schemas import StudentCreate
 from src.routes.utils import security
-from src.services.utils import send_email_to_student 
+from src.services.utils import send_email_to_student
+from src.services.constants import ACCOUNT_CREATION_EMAIL_BODY
 
-def generate_random_password(length=8):
+
+def generate_random_password(length: int = 8) -> str:
+    """
+    Generate a random alphanumeric password.
+
+    Args:
+        length (int): Length of the password. Defaults to 8.
+
+    Returns:
+        str: Randomly generated password.
+    """
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
-async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes):
+
+async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> dict:
+    """
+    Process a CSV file containing student details, insert them into the database,
+    and send credentials via email.
+
+    Args:
+        db (AsyncIOMotorDatabase): MongoDB database instance.
+        file_bytes (bytes): Raw CSV file data.
+
+    Returns:
+        dict: Summary of inserted students and their emails.
+    """
     csv_text = file_bytes.decode("utf-8")
     reader = csv.DictReader(io.StringIO(csv_text))
 
@@ -19,7 +41,7 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes):
     students_to_insert = []
     credentials_to_send = []
 
-    for row in reader:  
+    for row in reader:
         if not required_fields.issubset(row.keys()):
             raise HTTPException(status_code=400, detail="CSV missing required columns.")
 
@@ -46,8 +68,6 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes):
             continue
 
         students_to_insert.append(student_data)
-
-        # Store for emailing
         credentials_to_send.append({
             "name": student_data["name"],
             "email": student_data["email"],
@@ -56,25 +76,15 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes):
         })
 
     if students_to_insert:
-        result = await db.students.insert_many(students_to_insert)
+        await db.students.insert_many(students_to_insert)
 
-        # Send emails to new students
         for cred in credentials_to_send:
             subject = "Your Student Account Credentials"
-            body = f"""
-Hi {cred['name']},
-
-Your student account has been created.
-
-Login credentials:
-Username: {cred['username']}
-Password: {cred['password']}
-
-Please login and update your password.
-
-Regards,
-Training and Placement Cell ,IIITDM Kurnool
-"""
+            body = ACCOUNT_CREATION_EMAIL_BODY.format(
+                name=cred['name'],
+                username=cred['username'],
+                password=cred['password']
+            )
             await send_email_to_student(cred["email"], subject, body)
 
         return {
@@ -82,26 +92,44 @@ Training and Placement Cell ,IIITDM Kurnool
             "inserted_emails": [cred["email"] for cred in credentials_to_send],
             "message": "Students added and credentials emailed"
         }
+    return {"inserted_count": 0, "inserted_emails": [], "message": "No new students added"}
 
 
-async def create_admin(db: AsyncIOMotorDatabase, admin_data: dict):
-    """Create a new admin user"""
-   
+async def create_admin(db: AsyncIOMotorDatabase, admin_data: dict) -> dict:
+    """
+    Create a new admin user in the database.
+
+    Args:
+        db (AsyncIOMotorDatabase): MongoDB database instance.
+        admin_data (dict): Admin details including 'email' and 'password'.
+
+    Raises:
+        HTTPException: If an admin with the given email already exists.
+
+    Returns:
+        dict: Newly created admin ID and success message.
+    """
     existing_admin = await db.admins.find_one({"email": admin_data["email"]})
     if existing_admin:
         raise HTTPException(status_code=400, detail="Admin with this email already exists")
-    
-    # Hash password
+
     admin_data["hashed_password"] = security.hash_password(admin_data["password"])
     admin_data["role"] = "admin"
-    admin_data.pop("password", None)  
-    
+    admin_data.pop("password", None)
+
     result = await db.admins.insert_one(admin_data)
     return {"id": str(result.inserted_id), "message": "Admin created successfully"}
 
+
 async def reader_to_async_iter(reader):
     """
-    Helper to turn sync csv.DictReader into async iterator.
+    Convert a synchronous CSV DictReader into an asynchronous iterator.
+
+    Args:
+        reader (csv.DictReader): Synchronous CSV reader.
+
+    Yields:
+        dict: Row data from the CSV.
     """
     for row in reader:
         yield row

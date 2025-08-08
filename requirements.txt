@@ -11,3 +11,5 @@ pydantic-settings
 email-validator
 python-dotenv
 fastapi-mail
+pytest-asyncio
+pytest-mock
