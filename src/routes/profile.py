@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.routes.utils import security
-from src.routes.schemas import TokenRequest, TokenResponse, UserResponseStudent , UserResponseAdmin
+from src.routes.schemas import  UserResponseStudent , UserResponseAdmin
 router = APIRouter(prefix="/profile", tags=["Profiles"])
 
 @router.get("/student/me", response_model=UserResponseStudent)

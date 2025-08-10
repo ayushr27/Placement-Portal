@@ -26,6 +26,7 @@ class StudentInDB(BaseModel):
     phone_no: Optional[str] = None
     hashed_password: str
     role: str = "student"
+    last_login: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
@@ -48,6 +49,7 @@ class AdminInDB(BaseModel):
     name: str
     hashed_password: str
     role: str = "admin"
+    last_login: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:

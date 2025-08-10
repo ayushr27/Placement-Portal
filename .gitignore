@@ -1,3 +1,4 @@
 __pycache__
 placement-portal/
 .env
+venv/
