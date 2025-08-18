@@ -1,7 +1,8 @@
+import uvicorn
 from fastapi import FastAPI
 from starlette.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
+
 from src.routes.register import router as student_router
 from src.routes.auth import router as auth_router
 from src.routes.profile import router as profile_router
