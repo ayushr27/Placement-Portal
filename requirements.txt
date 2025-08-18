@@ -16,5 +16,5 @@ pytest-mock
 httpx
 redis
 asyncio
-uptash-redis
+upstash-redis
 celery[redis]
