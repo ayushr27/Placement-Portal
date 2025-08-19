@@ -9,7 +9,7 @@ class StudentCreate(BaseModel):
     roll_number: str
     branch: str
     course: Optional[str] = None
-    year: int
+    batch: int
     phone_no: Optional[str] = None
     password: str
 
@@ -22,7 +22,7 @@ class StudentInDB(BaseModel):
     roll_number: str
     branch: str
     course: Optional[str] = None
-    year: int
+    batch: int
     phone_no: Optional[str] = None
     hashed_password: str
     role: str = "student"

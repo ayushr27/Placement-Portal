@@ -15,6 +15,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 ALGORITHM = "HS256"
 
 
+from datetime import datetime
+import pytz
+ist = pytz.timezone('Asia/Kolkata')
 async def get_user_from_collection(db: AsyncIOMotorDatabase, username: str, role: str):
     if role == "student":
         user = await db.students.find_one({"$or": [{"username": username}, {"email": username}]})

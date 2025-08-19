@@ -4,13 +4,8 @@ from src.services.register import process_student_csv, create_admin
 from src.database import get_database
 from src.routes.utils import security
 from src.services.schemas import AdminCreate
-from src.services.register import  process_student_csv
-import csv
-import io
-
 
 router = APIRouter(prefix="/register", tags=["Registration"])
-
 
 @router.post("/upload-csv")
 async def upload_student_csv(
@@ -27,11 +22,15 @@ async def upload_student_csv(
     file_bytes = await csv_file.read()
     result = await process_student_csv(db, file_bytes)
     return result
+
 @router.post("/admin")
 async def create_admin_user(
     admin_data: AdminCreate,
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
-    """Create a new admin user (for initial setup)"""
+    """
+    Create a new admin user (password login still works)
+    Google login can later be linked for Sheets access.
+    """
     result = await create_admin(db, admin_data.dict())
     return result

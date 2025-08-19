@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  server: 
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - 8000:8000
+    volumes:
+      - ./server:/app
+    environment:
+      - ENV=dev
+    networks:
+      - app-net
+  
+  website:
+    build:
+      context: ./website
+      dockerfile: Dockerfile
+    ports:
+      - 3000:3000
+    volumes:
+      - ./website:/app
+    networks:
+      - app-net
+    depends_on:
+      - server
+
+networks:
+  app-net:
+    driver: bridge

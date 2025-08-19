@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     MAIL_SSL_TLS: bool
     USE_CREDENTIALS: bool
     VALIDATE_CERTS: bool
+    google_client_id: str
+    google_client_secret: str
+    google_redirect_uri: str
 
 
     model_config = SettingsConfigDict(env_file=".env")

@@ -5,6 +5,9 @@ import uvicorn
 from src.routes.register import router as student_router
 from src.routes.auth import router as auth_router
 from src.routes.profile import router as profile_router
+from src.routes.jobs import router as jobs_router
+
+
 app = FastAPI()
 
 app.add_middleware(
@@ -19,6 +22,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(student_router)
 app.include_router(profile_router)
+app.include_router(jobs_router)
 @app.get("/", tags=["default"])
 async def index():
     return RedirectResponse(url="/docs")
