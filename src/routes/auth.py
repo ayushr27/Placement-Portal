@@ -10,6 +10,7 @@ from src.services import auth as auth_service
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
+
 @router.post("/token", response_model=TokenResponse)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),

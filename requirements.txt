@@ -11,6 +11,13 @@ pydantic-settings
 email-validator
 python-dotenv
 fastapi-mail
+pytest-asyncio
+pytest-mock
+httpx
+redis
+asyncio
+upstash-redis
+celery[redis]
 datetime
 google-auth
 google-auth-oauthlib
