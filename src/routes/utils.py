@@ -18,12 +18,13 @@ from datetime import datetime
 import pytz
 ist = pytz.timezone('Asia/Kolkata')
 async def get_user_from_collection(db: AsyncIOMotorDatabase, username: str, role: str):
-    if role == "student":
-        user = await db.students.find_one({"$or": [{"username": username}, {"email": username}]})
-    elif role == "admin":
-        user = await db.admins.find_one({"$or": [{"username": username}, {"email": username}]})
-    else:
-        user = None
+    try:
+        if role == "student":
+            user = await db.students.find_one({"$or": [{"username": username}, {"email": username}]})
+        elif role == "admin":
+            user = await db.admins.find_one({"$or": [{"username": username}, {"email": username}]})
+        else:
+            user = None
 
         if user:
             user["id"] = str(user["_id"])

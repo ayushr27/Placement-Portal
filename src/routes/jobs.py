@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.database import get_database
@@ -7,7 +8,7 @@ from src.routes.schemas import JobCreate, JobResponse
 
 router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
 
-@router.post("", summary="Create a job with Google Form and Job Details", response_model=JobResponse)
+@router.post("/create", summary="Create a job with Google Form and Job Details", response_model=JobResponse)
 async def create_job(
     payload: JobCreate,
     db: AsyncIOMotorDatabase = Depends(get_database),
@@ -31,3 +32,8 @@ async def create_job(
     if not result:
         raise HTTPException(status_code=500, detail="Failed to create job")
     return result
+
+
+@router.get("")
+def get_all_jobs()->List[JobResponse]:
+    pass

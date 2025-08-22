@@ -10,6 +10,9 @@ class Secrets(BaseSettings):
     UPSTASH_REDIS_REST_URL: str = "http://localhost:6379"
     UPSTASH_REDIS_REST_TOKEN: str = "dummy"
     CELERY_REDIS_URL: str = "redis://localhost:6379/0"
+    GOOGLE_CLIENT_ID: str = "fcish"
+    GOOGLE_CLIENT_SECRET: str = "jhcbajb"
+    GOOGLE_REDIRECT_URI: str = "https://jcgsdj"
 
     class Config:
         env_file = ".env"

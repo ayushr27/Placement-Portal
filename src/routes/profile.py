@@ -31,10 +31,12 @@ async def get_student_profile(current_user: dict = Depends(security.get_current_
         "roll_number": current_user.get("roll_number"),
         "branch": current_user.get("branch"),
         "course": current_user.get("course"),
+        "batch": current_user.get("batch"),
         "year": current_user.get("year"),
         "phone_no": current_user.get("phone_no"),
         "role": current_user.get("role", "student"),
     }
+
 
 
 @router.get("/admin/me", response_model=UserResponseAdmin)

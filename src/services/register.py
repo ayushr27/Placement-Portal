@@ -11,7 +11,6 @@ from src.services.schemas import StudentCreate, StudentInDB
 from src.routes.utils import security
 from src.services.utils import send_email_to_student
 from src.services.constants import ACCOUNT_CREATION_EMAIL_BODY
-
 from src.services.utils import send_email_to_student
 from src.services import google_service
 
@@ -105,20 +104,7 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
 
             for cred in batch:
                 subject = "Your Student Account Credentials"
-                body = f"""
-Hi {cred['name']},
-
-Your student account has been created.
-
-Login credentials:
-Username: {cred['username']}
-Password: {cred['password']}
-
-Please login and update your password.
-
-Regards,
-Training and Placement Cell, IIITDM Kurnool
-"""
+                body = ACCOUNT_CREATION_EMAIL_BODY
                 await send_email_to_student(cred["email"], subject, body)
 
             # If more emails remain, wait before sending next batch
@@ -132,8 +118,6 @@ Training and Placement Cell, IIITDM Kurnool
     }
 
 
-async def create_admin(db: AsyncIOMotorDatabase, admin_data: dict):
-    if await db.admins.find_one({"email": admin_data["email"]}):
 async def create_admin(db: AsyncIOMotorDatabase, admin_data: dict) -> dict:
     """
     Create a new admin user in the database.

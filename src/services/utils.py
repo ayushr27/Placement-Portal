@@ -1,11 +1,10 @@
 import random
 import string
-from datetime import datetime
 import pytz
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from src.routes.utils import security
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from src.services.config import secrets
+from src.config import secrets
 from src.services.constants import (
     ACCOUNT_CREATION_EMAIL_FROM_NAME,
     ACCOUNT_CREATION_EMAIL_SERVER,

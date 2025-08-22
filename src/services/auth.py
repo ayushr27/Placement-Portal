@@ -1,12 +1,12 @@
-# src/services/auth.py
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from fastapi import HTTPException
 from src.routes.utils import get_user, security
 from src.services.utils import send_email
 from src.services import google_service
-from src.services.utils import ist
+# from src.services.utils import ist
+
 #username/password login
 async def login_user(username: str, password: str, db: AsyncIOMotorDatabase):
     user = await get_user(username, db)
@@ -16,7 +16,7 @@ async def login_user(username: str, password: str, db: AsyncIOMotorDatabase):
     collection = "students" if user.get("role") == "student" else "admins"
     await db[collection].update_one(
         {"username": user["username"]},
-        {"$set": {"last_login": datetime.now(ist)}}
+        {"$set": {"last_login": datetime.now(timezone.utc)}}
     )
 
     token = security.create_access_token({"sub": user["username"], "role": user.get("role", "student")})
@@ -61,7 +61,7 @@ async def forgot_password_request_service(email: str, db: AsyncIOMotorDatabase):
 
     otp = str(random.randint(100000, 999999))
     hashed_otp = security.hash_password(otp)
-    expiry = datetime.now(ist) + timedelta(minutes=5)
+    expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
 
     await db["forgot-password"].delete_many({"email": email})
     await db["forgot-password"].insert_one({
@@ -80,7 +80,8 @@ async def forgot_password_verify_service(email: str, otp: str, db: AsyncIOMotorD
         raise HTTPException(status_code=404, detail="No OTP request found")
     if not security.verify_password(otp, token_doc["otp_hash"]):
         raise HTTPException(status_code=400, detail="Invalid OTP")
-    if datetime.now(ist) > token_doc["expiry"]:
+    expiry = token_doc["expiry"].replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expiry:
         raise HTTPException(status_code=400, detail="OTP expired")
 
     await db["forgot-password"].update_one({"_id": token_doc["_id"]}, {"$set": {"verified": True}})
