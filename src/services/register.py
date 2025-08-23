@@ -73,7 +73,7 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
             continue
 
         student_in_db = StudentInDB(
-            # id=str(ObjectId()),
+            #id=str(ObjectId()),
             name=student_create.name,
             gender=student_create.gender,
             email=student_create.email,

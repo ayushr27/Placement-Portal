@@ -9,6 +9,7 @@ from src.services.jobs import check_and_update_jobs
 from src.routes.schemas import JobInDB
 from src.redis import cache_get, cache_set, cache_delete
 from pydantic import BaseModel
+from src.services.job_metrics import update_all_jobs_metrics
 router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
 
 @router.post("/create", summary="Create a job with Google Form and Job Details", response_model=JobResponse)
@@ -101,3 +102,41 @@ async def get_all_master_sheets(db: AsyncIOMotorDatabase = Depends(get_database)
     cache_set("master_sheets:all", serialize_for_cache(sheets_response), expire=3600)
 
     return sheets_response
+
+
+
+@router.get("/job_metrics/{job_id}")
+async def get_job_metrics(
+    job_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: dict = Depends(security.get_current_user)
+):
+    
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can view job metrics")
+
+    metrics= await db.job_metrics.find_one({"job_id": job_id})
+    metrics["_id"]= str(metrics["_id"])
+    if not metrics:
+        raise HTTPException(status_code=404, detail="Metrics not found for this job")
+    return metrics
+
+@router.post("/update-all-metrics")
+async def update_all_metrics(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: dict = Depends(security.get_current_user)
+):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can update metrics")
+
+    admin_doc = await db.admins.find_one({"_id": current_user.get("_id")})
+    if not admin_doc:
+        raise HTTPException(status_code=400, detail="Admin not found")
+
+    updated_jobs = await update_all_jobs_metrics(db, admin_doc)
+
+    return {
+        "status": "ok",
+        "message": f"Metrics updated/created for {len(updated_jobs)} jobs",
+        "updated_jobs": updated_jobs
+    }

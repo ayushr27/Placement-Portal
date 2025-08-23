@@ -1,11 +1,11 @@
 import random
 import string
 import pytz
-from src.redis import celery
+
 import asyncio
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from src.routes.utils import security
-from motor.motor_asyncio import AsyncIOMotorDatabase
+
 from src.config import secrets
 from src.services.constants import (
     ACCOUNT_CREATION_EMAIL_FROM_NAME,
@@ -42,18 +42,7 @@ def generate_random_password(length: int = 10) -> str:
     chars = string.ascii_letters + string.digits + "!@#$%^&*()"
     return ''.join(random.choice(chars) for _ in range(length))
 
-@celery.task
-def send_email_task(email: str, subject: str, body: str) -> None:
-    """
-    Celery task to send an email asynchronously.
 
-    Args:
-        email (str): Recipient's email address.
-        subject (str): Email subject.
-        body (str): Email body text.
-    """
-    asyncio.run(send_email_to_student(email, subject, body))
-    return {"status": "sent", "email": email}
 
 
 async def send_email_to_student(email: str, subject: str, body: str) -> None:
