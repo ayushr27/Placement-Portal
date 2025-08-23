@@ -1,6 +1,8 @@
 import random
 import string
 import pytz
+from src.redis import celery
+import asyncio
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from src.routes.utils import security
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -40,6 +42,19 @@ def generate_random_password(length: int = 10) -> str:
     chars = string.ascii_letters + string.digits + "!@#$%^&*()"
     return ''.join(random.choice(chars) for _ in range(length))
 
+@celery.task
+def send_email_task(email: str, subject: str, body: str) -> None:
+    """
+    Celery task to send an email asynchronously.
+
+    Args:
+        email (str): Recipient's email address.
+        subject (str): Email subject.
+        body (str): Email body text.
+    """
+    asyncio.run(send_email_to_student(email, subject, body))
+    return {"status": "sent", "email": email}
+
 
 async def send_email_to_student(email: str, subject: str, body: str) -> None:
     """
@@ -68,18 +83,7 @@ async def send_email_to_student(email: str, subject: str, body: str) -> None:
     except Exception as exc:
         raise RuntimeError(f"Failed to send email to {email}") from exc
 
-async def send_email(to_email: str, subject: str, body: str):
-    try:
-        message = MessageSchema(
-            subject=subject,
-            recipients=[to_email],
-            body=body,
-            subtype="plain"
-        )
-        fm = FastMail(conf)
-        await fm.send_message(message)
-    except Exception as exc:
-        raise RuntimeError(f"Failed to send email to {email}") from exc
+
 
 
 async def send_email(to_email: str, subject: str, body: str):

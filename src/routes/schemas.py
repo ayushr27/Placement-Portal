@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict ,HttpUrl
 from typing import Optional, List
 from datetime import datetime, timedelta
 import pytz
+from bson import ObjectId
 def ist():
     tz = pytz.timezone("Asia/Kolkata")
     return datetime.now(tz)
@@ -29,7 +30,7 @@ class TokenRequest(BaseModel):
 
 
 class UserResponseStudent(BaseModel):
-    id: Optional[str] = None
+    id: str = Field(alias="_id")
     name: str = Field(..., min_length=2, max_length=100)
     gender: Optional[str] = Field(None, pattern="^(male|female|other)$")
     email: EmailStr
@@ -49,6 +50,17 @@ class UserResponseAdmin(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
 
+class StudentProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    gender: Optional[str] = None
+    phone_no: Optional[str] = None
+    
+
+class AdminProfileUpdate(BaseModel):
+    username: Optional[str] = None
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -71,23 +83,27 @@ class JobCreate(BaseModel):
     job_description: Optional[str] = None  
 
 
+
 class JobInDB(JobCreate):
-    id: str 
+    id: str = Field(alias="_id") 
     created_by: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(ist))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(ist))
-    location: Optional[str] = None
-    gender_preference: Optional[List[str]] = None
-    CG_Cutoff: Optional[float] = None
-    form_link: str
-    application_deadline: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=ist)
+    updated_at: datetime = Field(default_factory=ist)
     responses_sheet_link: str
     master_sheet_id: str
     master_sheet_link: str
+    synced: bool = False
+
+    class Config:
+        populate_by_name = True  
+        arbitrary_types_allowed = True
+        json_encoders = {
+            ObjectId: str         
+        }
 
 
 class JobResponse(BaseModel):
-    id: str  
+    id: str = Field(alias="_id")  
     title: str
     company: str
     batch: list[int]
@@ -96,7 +112,40 @@ class JobResponse(BaseModel):
     CG_Cutoff: Optional[float] = None
     form_link: str
     application_deadline: Optional[datetime] = None
-    responses_sheet_link: str
+    responses_sheet_link: Optional[str] = None
     master_sheet_id: str
     master_sheet_link: str
-    
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {
+            ObjectId: str
+        }
+
+class MasterSheetInDB(BaseModel):
+    _id: str
+    admin_id: Optional[str] = None
+    batch_year: Optional[List[int]] = None 
+    spreadsheet_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+   
+   
+
+class MasterSheetResponse(BaseModel):
+    _id: str
+    admin_id: Optional[str] = None
+    batch_year: Optional[List[int]] = None  
+    spreadsheet_id: Optional[str] = None
+    created_at: Optional[str] = None  
+   
+
+class AdminEditStudentProfile(BaseModel):
+    name: Optional[str] = None
+    gender: Optional[str] = None
+    phone_no: Optional[str] = None
+    course: Optional[str] = None
+    batch: Optional[int] = None
+    year: Optional[int] = None
+    roll_number: Optional[str] = None
+    branch: Optional[str] = None   

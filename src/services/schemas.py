@@ -18,7 +18,7 @@ class StudentCreate(BaseModel):
 
 
 class StudentInDB(BaseModel):
-    id: Optional[str] = None
+    id: Optional[str] = Field(default=None, alias="_id")
     name: str
     gender: Optional[str] = None
     email: EmailStr
@@ -47,7 +47,7 @@ class AdminCreate(BaseModel):
 
 
 class AdminInDB(BaseModel):
-    id: Optional[str] = None
+    id: str = Field(alias="_id")
     username: str
     email: EmailStr
     name: str
@@ -60,3 +60,5 @@ class AdminInDB(BaseModel):
         validate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
+
+

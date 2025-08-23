@@ -36,21 +36,34 @@ async def _get_admin_doc(db: AsyncIOMotorDatabase, username_or_email: str) -> di
     return admin
 
 async def sync_responses_to_master(db, admin_doc, job_doc: JobInDB):
-   
     form_responses_service = google_service.get_google_service_for_admin(admin_doc, "forms", "v1")
     form_id = await extract_form_id(job_doc.form_link)
 
+    
+    form_info = form_responses_service.forms().get(formId=form_id).execute()
+    roll_question_id = None
+    
+    for item in form_info.get("items", []):
+        question = item.get("questionItem", {}).get("question", {})
+        title = item.get("title", "").strip().lower() or question.get("title", "").strip().lower()
+        if "roll" in title and "number" in title:
+            roll_question_id = question.get("questionId")
+            break
+
+    if not roll_question_id:
+        raise Exception("Roll Number question not found in the form")
+
+   
     responses = form_responses_service.forms().responses().list(formId=form_id).execute()
     applied_rolls = set()
 
     for r in responses.get("responses", []):
         answers = r.get("answers", {})
-       
-        for ans in answers.values():
-            if "textAnswers" in ans:
-                applied_rolls.add(ans["textAnswers"]["answers"][0]["value"].strip())
+        roll_answer = answers.get(roll_question_id, {})
+        if "textAnswers" in roll_answer:
+            applied_rolls.add(roll_answer["textAnswers"]["answers"][0]["value"].strip())
 
-    
+
     sheets_service = google_service.get_google_service_for_admin(admin_doc, "sheets", "v4")
     sheet = sheets_service.spreadsheets()
 
@@ -222,11 +235,12 @@ async def create_job_with_links(
         created_at=datetime.now(ist),
         updated_at=datetime.now(ist),
         master_sheet_id=master_sheet_id,
-        master_sheet_link=f"https://docs.google.com/spreadsheets/d/{master_sheet_id}"
+        master_sheet_link=f"https://docs.google.com/spreadsheets/d/{master_sheet_id}",
+        synced=False
     )
 
     await db.jobs.insert_one(job_doc.dict(by_alias=True))
-    await check_and_update_jobs(db)
+    
     return JobResponse(
         id=job_doc.id,
         title=job_doc.title,

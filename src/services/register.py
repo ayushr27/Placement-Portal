@@ -9,9 +9,9 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from fastapi import HTTPException
 from src.services.schemas import StudentCreate, StudentInDB
 from src.routes.utils import security
-from src.services.utils import send_email_to_student
+from src.services.utils import send_email_task
 from src.services.constants import ACCOUNT_CREATION_EMAIL_BODY
-from src.services.utils import send_email_to_student
+
 from src.services import google_service
 
 def generate_random_password(length: int = 8) -> str:
@@ -73,7 +73,7 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
             continue
 
         student_in_db = StudentInDB(
-            id=str(ObjectId()),
+            # id=str(ObjectId()),
             name=student_create.name,
             gender=student_create.gender,
             email=student_create.email,
@@ -87,7 +87,7 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
             role="student",
         )
 
-        to_insert.append(student_in_db.model_dump())
+        to_insert.append(student_in_db.model_dump(exclude={"id"}))
         creds_to_send.append({
             "name": student_in_db.name,
             "email": student_in_db.email,
@@ -98,16 +98,20 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
     if to_insert:
         await db.students.insert_many(to_insert)
 
-        # 🔹 Send mails in batches
+        # Send mails in batches
         for i in range(0, len(creds_to_send), BATCH_SIZE):
             batch = creds_to_send[i:i + BATCH_SIZE]
 
             for cred in batch:
                 subject = "Your Student Account Credentials"
-                body = ACCOUNT_CREATION_EMAIL_BODY
-                await send_email_to_student(cred["email"], subject, body)
+                body = ACCOUNT_CREATION_EMAIL_BODY.format(
+                    name=cred["name"],
+                    username=cred["username"],
+                    password=cred["password"],
+                )
+                send_email_task.delay(cred["email"], subject, body)
 
-            # If more emails remain, wait before sending next batch
+            
             if i + BATCH_SIZE < len(creds_to_send):
                 await asyncio.sleep(BATCH_DELAY_SECONDS)
 

@@ -1,7 +1,7 @@
 ACCOUNT_CREATION_EMAIL_BODY = """
 Hi {name},
 
-Your student account has been created.
+Your student account for Placement Portal has been created.
 
 Login credentials:
 Username: {username}
