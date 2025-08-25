@@ -23,6 +23,7 @@ app.add_middleware(
 async def index():
     return RedirectResponse(url="/docs")
 
+
 @app.get("/health", include_in_schema=False)
 async def health_check():
     return {"status": "ok"}

@@ -1,10 +1,8 @@
 import random
 import string
 import pytz
-
 import asyncio
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
-from src.routes.utils import security
 from src.redis import celery
 from src.config import secrets
 from src.services.constants import (
@@ -27,6 +25,7 @@ conf = ConnectionConfig(
     USE_CREDENTIALS=True,
     VALIDATE_CERTS=True,
 )
+
 
 def generate_random_password(length: int = 10) -> str:
     """
@@ -82,8 +81,6 @@ async def send_email_to_student(email: str, subject: str, body: str) -> None:
 
     except Exception as exc:
         raise RuntimeError(f"Failed to send email to {email}") from exc
-
-
 
 
 async def send_email(to_email: str, subject: str, body: str):

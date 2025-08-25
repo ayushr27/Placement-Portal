@@ -1,75 +1,115 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel
 from src.database import get_database
 from src.routes.utils import security
 from src.services import jobs as jobs_service
-from src.routes.schemas import JobCreate, JobResponse , MasterSheetInDB, MasterSheetResponse
+from src.routes.schemas import (
+    JobCreate,
+    JobResponse,
+    MasterSheetInDB,
+    MasterSheetResponse,
+    JobInDB,
+    JobMetricsRequest
+)
 from src.services.jobs import check_and_update_jobs
-from src.routes.schemas import JobInDB
 from src.redis import cache_get, cache_set, cache_delete
-from pydantic import BaseModel
 from src.services.job_metrics import update_all_jobs_metrics
+from src import logger
+
+
 router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
 
-@router.post("/create", summary="Create a job with Google Form and Job Details", response_model=JobResponse)
+
+@router.post(
+    "/create",
+    summary="Create a job with Google Form and Job Details",
+    response_model=JobResponse,
+)
 async def create_job(
     payload: JobCreate,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    current_user: dict = Depends(security.get_current_user)
+    current_user: dict = Depends(security.get_current_user),
 ):
     if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can create jobs")
+        logger.warning(f"Unauthorized job creation attempt by {current_user}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can create jobs",
+        )
 
-    
-    form_id = await jobs_service.extract_form_id(str(payload.form_link))
+    try:
+        form_id = await jobs_service.extract_form_id(str(payload.form_link))
+        sheet_link = jobs_service.create_sheet_for_job(
+            form_id=form_id, job_title=payload.title
+        )
 
-    sheet_link = jobs_service.create_sheet_for_job(form_id=form_id, job_title=payload.title)
+        result = await jobs_service.create_job_with_links(
+            db=db,
+            current_admin_username=current_user.get("username"),
+            job_data=payload,
+            responses_sheet_link=sheet_link,
+        )
+        if result:
+            cache_delete("jobs:all")
+            return result
 
-    result = await jobs_service.create_job_with_links(
-        db=db,
-        current_admin_username=current_user.get("username"),
-        job_data=payload,
-        responses_sheet_link=sheet_link
-    )
-    if result:
-        cache_delete("jobs:all")
-    if not result:
-        raise HTTPException(status_code=500, detail="Failed to create job")
-    return result
+        logger.error("Failed to create job (DB returned None)")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create job",
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during job creation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unexpected error occurred while creating job",
+        )
 
 
 @router.post("/sync-expired")
 async def sync_expired_jobs(db: AsyncIOMotorDatabase = Depends(get_database)):
-    await check_and_update_jobs(db)
-    return {"status": "ok", "message": "Expired jobs synced successfully"}
+    try:
+        await check_and_update_jobs(db)
+        return {"status": "ok", "message": "Expired jobs synced successfully"}
+    except Exception as e:
+        logger.error(f"Error syncing expired jobs: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to sync expired jobs",
+        )
+
 
 @router.get("/get-jobs", response_model=List[JobResponse])
-async def get_all_jobs(db: AsyncIOMotorDatabase = Depends(get_database)) -> List[JobResponse]:
-    
-    cached = cache_get("jobs:all")
-    if cached:
-        return [JobResponse(**j) for j in cached]   # already serialized
+async def get_all_jobs(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> List[JobResponse]:
+    try:
+        cached = cache_get("jobs:all")
+        if cached:
+            return [JobResponse(**j) for j in cached]
 
-    #Otherwisefrom DB
-    jobs_cursor = db.jobs.find({})
-    jobs = []
-    async for job in jobs_cursor:
-        job["_id"] = str(job["_id"])
-        jobs.append(JobInDB(**job))
+        jobs_cursor = db.jobs.find({})
+        jobs: List[JobInDB] = []
+        async for job in jobs_cursor:
+            job["_id"] = str(job["_id"])
+            jobs.append(JobInDB(**job))
 
-    jobs_response = [JobResponse(**j.dict()) for j in jobs]
+        jobs_response = [JobResponse(**j.model_dump()) for j in jobs]
 
-    #Save to Redis
-    cache_set(
-    "jobs:all",
-    [j.model_dump(mode="json") for j in jobs_response],
-    expire=3600
-)
-
-    return jobs_response
-
-
+        cache_set(
+            "jobs:all",
+            [j.model_dump(mode="json") for j in jobs_response],
+            expire=3600,
+        )
+        return jobs_response
+    except Exception as e:
+        logger.error(f"Error fetching jobs: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch jobs",
+        )
 
 
 def serialize_for_cache(objects: List[BaseModel]):
@@ -77,66 +117,112 @@ def serialize_for_cache(objects: List[BaseModel]):
 
 
 @router.get("/master-sheets", response_model=List[MasterSheetResponse])
-async def get_all_master_sheets(db: AsyncIOMotorDatabase = Depends(get_database)) -> List[MasterSheetResponse]:
-    # Try cache
-    cached = cache_get("master_sheets:all")
-    if cached:
-        return [MasterSheetResponse(**sheet) for sheet in cached]
+async def get_all_master_sheets(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> List[MasterSheetResponse]:
+    try:
+        cached = cache_get("master_sheets:all")
+        if cached:
+            return [MasterSheetResponse(**sheet) for sheet in cached]
 
-    # Fetch from DB
-    sheets_cursor = db.master_sheets.find({})
-    sheets = []
-    async for sheet in sheets_cursor:
-        sheet["_id"] = str(sheet["_id"])
-        if "admin_id" in sheet:
-            sheet["admin_id"] = str(sheet["admin_id"])
-        sheets.append(MasterSheetInDB(**sheet))
-        print(sheets)
-    if not sheets:
-        raise HTTPException(status_code=404, detail="No master sheets found")
+        sheets_cursor = db.master_sheets.find({})
+        sheets: List[MasterSheetInDB] = []
+        async for sheet in sheets_cursor:
+            sheet["_id"] = str(sheet["_id"])
+            if "admin_id" in sheet:
+                sheet["admin_id"] = str(sheet["admin_id"])
+            sheets.append(MasterSheetInDB(**sheet))
 
-   
-    sheets_response = [MasterSheetResponse(**s.model_dump(mode="json")) for s in sheets]
+        if not sheets:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No master sheets found",
+            )
 
-    # Store in Redis cache
-    cache_set("master_sheets:all", serialize_for_cache(sheets_response), expire=3600)
-
-    return sheets_response
-
+        sheets_response = [
+            MasterSheetResponse(**s.model_dump(mode="json")) for s in sheets
+        ]
+        cache_set(
+            "master_sheets:all",
+            serialize_for_cache(sheets_response),
+            expire=3600,
+        )
+        return sheets_response
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching master sheets: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch master sheets",
+        )
 
 
 @router.get("/job_metrics/{job_id}")
 async def get_job_metrics(
-    job_id: str,
+    jobid: JobMetricsRequest,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    current_user: dict = Depends(security.get_current_user)
+    current_user: dict = Depends(security.get_current_user),
 ):
-    
+    job_id = jobid.job_id
     if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can view job metrics")
+        logger.warning(f"Unauthorized metrics view attempt by {current_user}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can view job metrics",
+        )
 
-    metrics= await db.job_metrics.find_one({"job_id": job_id})
-    metrics["_id"]= str(metrics["_id"])
-    if not metrics:
-        raise HTTPException(status_code=404, detail="Metrics not found for this job")
-    return metrics
+    try:
+        metrics = await db.job_metrics.find_one({"job_id": job_id})
+        if not metrics:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Metrics not found for this job",
+            )
+        metrics["_id"] = str(metrics["_id"])
+        return metrics
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching metrics for job {job_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch job metrics",
+        )
+
 
 @router.post("/update-all-metrics")
 async def update_all_metrics(
     db: AsyncIOMotorDatabase = Depends(get_database),
-    current_user: dict = Depends(security.get_current_user)
+    current_user: dict = Depends(security.get_current_user),
 ):
     if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can update metrics")
+        logger.warning(f"Unauthorized metrics update attempt by {current_user}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can update metrics",
+        )
 
-    admin_doc = await db.admins.find_one({"_id": current_user.get("_id")})
-    if not admin_doc:
-        raise HTTPException(status_code=400, detail="Admin not found")
+    try:
+        admin_doc = await db.admins.find_one({"_id": current_user.get("_id")})
+        if not admin_doc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Admin not found",
+            )
 
-    updated_jobs = await update_all_jobs_metrics(db, admin_doc)
+        updated_jobs = await update_all_jobs_metrics(db, admin_doc)
 
-    return {
-        "status": "ok",
-        "message": f"Metrics updated/created for {len(updated_jobs)} jobs",
-        "updated_jobs": updated_jobs
-    }
+        return {
+            "status": "ok",
+            "message": f"Metrics updated/created for {len(updated_jobs)} jobs",
+            "updated_jobs": updated_jobs,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating all job metrics: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update all metrics",
+        )

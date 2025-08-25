@@ -1,6 +1,3 @@
-# tests/test_register_service.py
-import io
-import csv
 import pytest
 from fastapi import HTTPException
 from src.services.register import process_student_csv
@@ -50,13 +47,13 @@ async def test_existing_student_skipped(monkeypatch):
     db.students.data.append({"email": "jane@example.com"})
 
     csv_content = (
-        "name,email,roll_number,branch,year,course\n"
-        "Jane Doe,jane@example.com,101,CSE,3,BTech\n"
+        "name,email,roll_number,branch,batch,course\n"
+        "Jane Doe,jane@example.com,101,CSE,2027,BTech\n"
     )
     file_bytes = csv_content.encode("utf-8")
 
     # Patch send_email_to_student to avoid real sending
-    monkeypatch.setattr("src.services.register.send_email_to_student", lambda *a, **k: None)
+    monkeypatch.setattr("src.services.utils.send_email_to_student", lambda *a, **k: None)
 
     result = await process_student_csv(db, file_bytes)
     assert result == {
@@ -71,16 +68,16 @@ async def test_new_student_insert_and_email(monkeypatch):
     db = FakeDB()
 
     csv_content = (
-        "name,email,roll_number,branch,year,course\n"
-        "John Doe,john@example.com,102,ME,2,BTech\n"
+        "name,email,roll_number,branch,batch,course\n"
+        "John Doe,john@example.com,102,ME,2027,BTech\n"
     )
     file_bytes = csv_content.encode("utf-8")
 
     sent_emails = []
-    async def fake_send_email(to, subject, body):
+    def fake_send_email(to, subject, body):
         sent_emails.append((to, subject, body))
 
-    monkeypatch.setattr("src.services.register.send_email_to_student", fake_send_email)
+    monkeypatch.setattr("src.services.register.send_email_task.delay", fake_send_email)
 
     result = await process_student_csv(db, file_bytes)
 

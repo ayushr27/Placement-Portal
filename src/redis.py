@@ -3,13 +3,12 @@ from src.config import secrets
 from celery import Celery
 from upstash_redis import Redis
 import ssl
-# Upstash Redis client
+
 redis = Redis(
     url=secrets.UPSTASH_REDIS_REST_URL,
     token=secrets.UPSTASH_REDIS_REST_TOKEN
 )
 
-# Celery setup
 celery = Celery(
     "worker",
     broker=secrets.CELERY_REDIS_URL,
@@ -18,7 +17,7 @@ celery = Celery(
 
 celery.conf.update(
     broker_use_ssl={
-        "ssl_cert_reqs": ssl.CERT_NONE,   # or CERT_REQUIRED if you have proper certs
+        "ssl_cert_reqs": ssl.CERT_NONE,
     },
     redis_backend_use_ssl={
         "ssl_cert_reqs": ssl.CERT_NONE,
@@ -31,7 +30,6 @@ celery.conf.update(
 )
 
 
-#redis helper functions
 def cache_set(key: str, value, expire: int = 3600):
     """Set a key in Redis with optional expiry (default: 1 hour)."""
     redis.set(key, json.dumps(value), ex=expire)

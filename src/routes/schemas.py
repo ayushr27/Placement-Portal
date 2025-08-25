@@ -1,11 +1,15 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict ,HttpUrl
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 from bson import ObjectId
+
+
 def ist():
     tz = pytz.timezone("Asia/Kolkata")
     return datetime.now(tz)
+
+
 class TokenData(BaseModel):
     username: Optional[str] = None
 
@@ -50,17 +54,18 @@ class UserResponseAdmin(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
 
+
 class StudentProfileUpdate(BaseModel):
     name: Optional[str] = None
     gender: Optional[str] = None
     phone_no: Optional[str] = None
-    
+
 
 class AdminProfileUpdate(BaseModel):
     username: Optional[str] = None
     name: Optional[str] = None
     email: Optional[EmailStr] = None
-    
+
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -70,7 +75,8 @@ class LoginRequest(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
-    
+
+
 class JobCreate(BaseModel):
     title: str = Field(..., min_length=2, max_length=200)
     company: str = Field(..., min_length=2, max_length=200)
@@ -80,12 +86,11 @@ class JobCreate(BaseModel):
     location: Optional[str] = Field(None, min_length=2, max_length=200)
     form_link: str = Field(..., min_length=5, max_length=500)
     application_deadline: Optional[datetime] = None
-    job_description: Optional[str] = None  
-
+    job_description: Optional[str] = None
 
 
 class JobInDB(JobCreate):
-    id: str = Field(alias="_id") 
+    id: str = Field(alias="_id")
     created_by: str
     created_at: datetime = Field(default_factory=ist)
     updated_at: datetime = Field(default_factory=ist)
@@ -95,15 +100,15 @@ class JobInDB(JobCreate):
     synced: bool = False
 
     class Config:
-        populate_by_name = True  
+        populate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {
-            ObjectId: str         
+            ObjectId: str
         }
 
 
 class JobResponse(BaseModel):
-    id: str = Field(alias="_id")  
+    id: str = Field(alias="_id")
     title: str
     company: str
     batch: list[int]
@@ -123,22 +128,26 @@ class JobResponse(BaseModel):
             ObjectId: str
         }
 
+
+class JobMetricsRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, description="Unique Job ID")
+
+
 class MasterSheetInDB(BaseModel):
     _id: str
     admin_id: Optional[str] = None
-    batch_year: Optional[List[int]] = None 
+    batch_year: Optional[List[int]] = None
     spreadsheet_id: Optional[str] = None
     created_at: Optional[datetime] = None
-   
-   
+
 
 class MasterSheetResponse(BaseModel):
     _id: str
     admin_id: Optional[str] = None
-    batch_year: Optional[List[int]] = None  
+    batch_year: Optional[List[int]] = None
     spreadsheet_id: Optional[str] = None
-    created_at: Optional[str] = None  
-   
+    created_at: Optional[str] = None
+
 
 class AdminEditStudentProfile(BaseModel):
     name: Optional[str] = None
@@ -148,4 +157,4 @@ class AdminEditStudentProfile(BaseModel):
     batch: Optional[int] = None
     year: Optional[int] = None
     roll_number: Optional[str] = None
-    branch: Optional[str] = None   
+    branch: Optional[str] = None

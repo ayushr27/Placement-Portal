@@ -5,18 +5,17 @@ from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
-
 from src.config import secrets
 from src.routes.schemas import TokenRequest
 from src.database import get_database
+import pytz
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 ALGORITHM = "HS256"
-
-
-from datetime import datetime
-import pytz
 ist = pytz.timezone('Asia/Kolkata')
+
+
 async def get_user_from_collection(db: AsyncIOMotorDatabase, username: str, role: str):
     try:
         if role == "student":
