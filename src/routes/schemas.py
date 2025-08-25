@@ -129,10 +129,6 @@ class JobResponse(BaseModel):
         }
 
 
-class JobMetricsRequest(BaseModel):
-    job_id: str = Field(..., min_length=1, description="Unique Job ID")
-
-
 class MasterSheetInDB(BaseModel):
     _id: str
     admin_id: Optional[str] = None
