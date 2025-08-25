@@ -34,4 +34,4 @@ app.include_router(profile_router)
 app.include_router(jobs_router)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, proxy_headers=True)  # testing......hmmm
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, proxy_headers=True)  # testing......hmmmmm
