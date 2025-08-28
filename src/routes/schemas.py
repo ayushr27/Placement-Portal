@@ -89,6 +89,18 @@ class JobCreate(BaseModel):
     job_description: Optional[str] = None
 
 
+
+class JobUpdate(BaseModel):
+    title: Optional[str] = None
+    company: Optional[str] = None
+    batch: Optional[List[int]] = None
+    CG_Cutoff: Optional[float] = None
+    gender_preference: Optional[List[str]] =None
+    location: Optional[str] = None
+    form_link: Optional[str] = None
+    application_deadline: Optional[datetime] = None
+    job_description: Optional[str] = None
+
 class JobInDB(JobCreate):
     id: str = Field(alias="_id")
     created_by: str
