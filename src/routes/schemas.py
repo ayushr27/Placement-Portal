@@ -158,3 +158,9 @@ class AdminEditStudentProfile(BaseModel):
     year: Optional[int] = None
     roll_number: Optional[str] = None
     branch: Optional[str] = None
+
+
+class StudentEditProfile(BaseModel): 
+    name: Optional[str] = None 
+    gender: Optional[str] = None 
+    phone_no: Optional[str] = None    
