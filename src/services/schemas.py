@@ -1,8 +1,8 @@
-from datetime import datetime,date
+from datetime import datetime
 from typing import Optional, Union
 
 from bson import ObjectId
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
 class StudentCreate(BaseModel):
@@ -15,7 +15,6 @@ class StudentCreate(BaseModel):
     batch: Optional[int] = None
     phone_no: Optional[str] = None
     password: str
-
 
 
 class StudentInDB(BaseModel):
@@ -46,16 +45,11 @@ class StudentInDB(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     career_path: Optional[str] = None
 
-    class Config:
-        validate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-
-
-    class Config:
-        validate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str},
+    )
 
 
 class AdminCreate(BaseModel):
@@ -75,7 +69,8 @@ class AdminInDB(BaseModel):
     last_login: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-    class Config:
-        validate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str},
+    )

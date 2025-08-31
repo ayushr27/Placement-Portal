@@ -66,8 +66,7 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
             batch=student_create.batch,
             phone_no=student_create.phone_no,
             hashed_password=security.hash_password(student_create.password),
-            role="student",
-            
+            role="student"
         )
 
         to_insert.append(student_in_db.model_dump(by_alias=True, exclude={"id"}))

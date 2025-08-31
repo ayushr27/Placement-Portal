@@ -1,14 +1,17 @@
 import re
-import requests
 from datetime import datetime
+
 import pytz
+import requests
 from bson import ObjectId
 from fastapi import HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
+
 from src import logger
 from src.config import secrets
 from src.routes.schemas import JobCreate, JobInDB, JobResponse
 from src.services import google_service
+
 
 ist = pytz.timezone("Asia/Kolkata")
 APPS_SCRIPT_URL = secrets.APPS_SCRIPT_URL
@@ -17,15 +20,6 @@ APPS_SCRIPT_URL = secrets.APPS_SCRIPT_URL
 async def extract_form_id(form_link: str) -> str:
     """
     Extract the Google Form ID from a form link.
-
-    Args:
-        form_link (str): The Google Form link.
-
-    Returns:
-        str: The extracted form ID.
-
-    Raises:
-        ValueError: If the form link does not contain a valid ID.
     """
     match = re.search(r"/d/([a-zA-Z0-9_-]+)", form_link)
     if not match:
@@ -37,15 +31,11 @@ async def extract_form_id(form_link: str) -> str:
 async def check_and_update_jobs(db: AsyncIOMotorDatabase):
     """
     Check expired jobs and update their sync status in the database.
-
-    Args:
-        db (AsyncIOMotorDatabase): The MongoDB database instance.
     """
     now = datetime.now(pytz.UTC)
     expired_jobs = db.jobs.find(
         {"application_deadline": {"$lte": now}, "synced": {"$ne": True}}
     )
-    print(expired_jobs)
 
     async for job in expired_jobs:
         try:
@@ -63,16 +53,6 @@ async def _get_admin_doc(
 ) -> dict:
     """
     Retrieve admin document from the database.
-
-    Args:
-        db (AsyncIOMotorDatabase): The MongoDB database instance.
-        username_or_email (str): Admin username or email.
-
-    Returns:
-        dict: The admin document.
-
-    Raises:
-        HTTPException: If the admin is not found or not linked to Google.
     """
     admin = await db.admins.find_one({"username": username_or_email}) or \
         await db.admins.find_one({"email": username_or_email})
@@ -80,6 +60,7 @@ async def _get_admin_doc(
     if not admin:
         logger.error("Admin not found for: %s", username_or_email)
         raise HTTPException(status_code=404, detail="Admin not found")
+
     if "google_oauth" not in admin:
         logger.error("Google account not linked for admin: %s", username_or_email)
         raise HTTPException(
@@ -93,14 +74,6 @@ async def sync_responses_to_master(
 ):
     """
     Sync responses from Google Form to the master Google Sheet.
-
-    Args:
-        db (AsyncIOMotorDatabase): Database instance.
-        admin_doc (dict): Admin document with Google credentials.
-        job_doc (JobInDB): Job document.
-
-    Raises:
-        Exception: If roll number question or company column is missing.
     """
     try:
         form_service = google_service.get_google_service_for_admin(
@@ -172,12 +145,6 @@ def update_column(
 ):
     """
     Update a column in the Google Sheet starting from row 2.
-
-    Args:
-        admin_doc (dict): Admin document with Google credentials.
-        spreadsheet_id (str): The spreadsheet ID.
-        column_index (int): Zero-based index of the column.
-        values (list[str]): List of values to insert.
     """
     try:
         sheets_service = google_service.get_google_service_for_admin(
@@ -193,7 +160,11 @@ def update_column(
             body=body,
         ).execute()
     except Exception as e:
-        logger.error("Failed to update column in sheet %s: %s", spreadsheet_id, str(e))
+        logger.error(
+            "Failed to update column in sheet %s: %s",
+            spreadsheet_id,
+            str(e),
+        )
         raise
 
 
@@ -202,14 +173,6 @@ async def _get_or_create_master_sheet(
 ) -> str:
     """
     Get or create a master placement sheet for the given batch.
-
-    Args:
-        db (AsyncIOMotorDatabase): Database instance.
-        admin_doc (dict): Admin document.
-        batch_year (list[int]): List of batch years.
-
-    Returns:
-        str: The spreadsheet ID.
     """
     existing = await db.master_sheets.find_one(
         {"admin_id": admin_doc["_id"], "batch_year": batch_year}
@@ -265,11 +228,6 @@ async def _ensure_company_column(
 ):
     """
     Ensure that a company column exists in the master sheet.
-
-    Args:
-        admin_doc (dict): Admin document.
-        spreadsheet_id (str): The spreadsheet ID.
-        company (str): Company name.
     """
     try:
         sheets_service = google_service.get_google_service_for_admin(
@@ -294,11 +252,20 @@ async def _ensure_company_column(
 
 
 def create_sheet_for_job(form_id: str, job_title: str) -> str:
+    """
+    Create a new Google Sheet for a job via Apps Script.
+    """
     try:
         payload = {"formId": form_id, "jobTitle": job_title}
-        logger.info(f"Creating sheet via {APPS_SCRIPT_URL} with payload: {payload}")
+        logger.info(
+            "Creating sheet via %s with payload: %s", APPS_SCRIPT_URL, payload
+        )
         response = requests.post(APPS_SCRIPT_URL, json=payload, timeout=15)
-        logger.info(f"Sheet creation response: {response.status_code}, {response.text}")
+        logger.info(
+            "Sheet creation response: %s, %s",
+            response.status_code,
+            response.text,
+        )
 
         if response.status_code == 200:
             data = response.json()
@@ -307,10 +274,12 @@ def create_sheet_for_job(form_id: str, job_title: str) -> str:
                 raise Exception("sheetUrl missing in response")
             return sheet_url
 
-        raise Exception(f"Apps Script returned {response.status_code}: {response.text}")
+        raise Exception(f"Apps Script returned {response.status_code}: "
+                        f"{response.text}")
     except Exception as e:
         logger.error("Error creating sheet for job %s: %s", job_title, str(e))
         raise
+
 
 async def create_job_with_links(
     db: AsyncIOMotorDatabase,
@@ -320,20 +289,10 @@ async def create_job_with_links(
 ) -> JobResponse:
     """
     Create a job entry with associated Google Sheets links.
-
-    Args:
-        db (AsyncIOMotorDatabase): Database instance.
-        current_admin_username (str): Username of the current admin.
-        job_data (JobCreate): Job creation data.
-        responses_sheet_link (str): Link to the responses sheet.
-
-    Returns:
-        JobResponse: The created job response object.
-
-    Raises:
-        HTTPException: If required job data is missing.
     """
-    if not job_data.job_designation or not job_data.company_name or not job_data.form_link:
+    if (not job_data.job_designation
+            or not job_data.company_name
+            or not job_data.form_link):
         logger.error("Missing required job data: %s", job_data)
         raise HTTPException(
             status_code=400, detail="Title, company, and form link are required"
@@ -372,34 +331,34 @@ async def create_job_with_links(
         raise
 
     job_doc = JobInDB(
-    id=str(ObjectId()),
-    company_name=job_data.company_name,
-    website=job_data.website,
-    linkedin_link=job_data.linkedin_link,
-    address=job_data.address,
-    batch=job_data.batch,
-    work_location=job_data.work_location,
-    job_designation=job_data.job_designation,
-    type_of_employment=job_data.type_of_employment,
-    eligibility_criteria=job_data.eligibility_criteria,
-    applicable_branch=job_data.applicable_branch,
-    stipend=job_data.stipend,
-    ctc=job_data.ctc,
-    other_benefits=job_data.other_benefits,
-    bond=job_data.bond,
-    job_description=job_data.job_description,
-    about_company=job_data.about_company,
-    selection_process=job_data.selection_process,
-    form_link=job_data.form_link,
-    application_deadline=job_data.application_deadline,
-    created_by=admin_doc.get("email") or admin_doc.get("username"),
-    created_at=datetime.now(ist),
-    updated_at=datetime.now(ist),
-    responses_sheet_link=responses_sheet_link,
-    master_sheet_id=master_sheet_id,
-    master_sheet_link=f"https://docs.google.com/spreadsheets/d/{master_sheet_id}",
-    synced=False,
-)
+        id=str(ObjectId()),
+        company_name=job_data.company_name,
+        website=job_data.website,
+        linkedin_link=job_data.linkedin_link,
+        address=job_data.address,
+        batch=job_data.batch,
+        work_location=job_data.work_location,
+        job_designation=job_data.job_designation,
+        type_of_employment=job_data.type_of_employment,
+        eligibility_criteria=job_data.eligibility_criteria,
+        applicable_branch=job_data.applicable_branch,
+        stipend=job_data.stipend,
+        ctc=job_data.ctc,
+        other_benefits=job_data.other_benefits,
+        bond=job_data.bond,
+        job_description=job_data.job_description,
+        about_company=job_data.about_company,
+        selection_process=job_data.selection_process,
+        form_link=job_data.form_link,
+        application_deadline=job_data.application_deadline,
+        created_by=admin_doc.get("email") or admin_doc.get("username"),
+        created_at=datetime.now(ist),
+        updated_at=datetime.now(ist),
+        responses_sheet_link=responses_sheet_link,
+        master_sheet_id=master_sheet_id,
+        master_sheet_link=f"https://docs.google.com/spreadsheets/d/{master_sheet_id}",
+        synced=False,
+    )
 
     try:
         await db.jobs.insert_one(job_doc.model_dump(by_alias=True))
@@ -408,32 +367,31 @@ async def create_job_with_links(
         raise
 
     return JobResponse(
-    id=job_doc.id,
-    company_name=job_doc.company_name,
-    website=job_doc.website,
-    linkedin_link=job_doc.linkedin_link,
-    address=job_doc.address,
-    batch=job_data.batch,
-    work_location=job_doc.work_location,
-    job_designation=job_doc.job_designation,
-    type_of_employment=job_doc.type_of_employment,
-    eligibility_criteria=job_doc.eligibility_criteria,
-    applicable_branch=job_doc.applicable_branch,
-    stipend=job_doc.stipend,
-    ctc=job_doc.ctc,
-    other_benefits=job_doc.other_benefits,
-    bond=job_doc.bond,
-    job_description=job_doc.job_description,
-    about_company=job_doc.about_company,
-    selection_process=job_doc.selection_process,
-    form_link=job_doc.form_link,
-    application_deadline=job_doc.application_deadline,
-    responses_sheet_link=job_doc.responses_sheet_link,
-    master_sheet_id=job_doc.master_sheet_id,
-    master_sheet_link=job_doc.master_sheet_link,
-    synced=job_doc.synced,
-    created_by=job_doc.created_by,
-    created_at=job_doc.created_at,
-    updated_at=job_doc.updated_at,
-)
-
+        id=job_doc.id,
+        company_name=job_doc.company_name,
+        website=job_doc.website,
+        linkedin_link=job_doc.linkedin_link,
+        address=job_doc.address,
+        batch=job_data.batch,
+        work_location=job_doc.work_location,
+        job_designation=job_doc.job_designation,
+        type_of_employment=job_doc.type_of_employment,
+        eligibility_criteria=job_doc.eligibility_criteria,
+        applicable_branch=job_doc.applicable_branch,
+        stipend=job_doc.stipend,
+        ctc=job_doc.ctc,
+        other_benefits=job_doc.other_benefits,
+        bond=job_doc.bond,
+        job_description=job_doc.job_description,
+        about_company=job_doc.about_company,
+        selection_process=job_doc.selection_process,
+        form_link=job_doc.form_link,
+        application_deadline=job_doc.application_deadline,
+        responses_sheet_link=job_doc.responses_sheet_link,
+        master_sheet_id=job_doc.master_sheet_id,
+        master_sheet_link=job_doc.master_sheet_link,
+        synced=job_doc.synced,
+        created_by=job_doc.created_by,
+        created_at=job_doc.created_at,
+        updated_at=job_doc.updated_at,
+    )

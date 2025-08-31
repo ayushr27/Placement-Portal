@@ -1,12 +1,15 @@
 import json
-from src.config import secrets
+import ssl
+
 from celery import Celery
 from upstash_redis import Redis
-import ssl
+
+from src.config import secrets
+
 
 redis = Redis(
     url=secrets.UPSTASH_REDIS_REST_URL,
-    token=secrets.UPSTASH_REDIS_REST_TOKEN
+    token=secrets.UPSTASH_REDIS_REST_TOKEN,
 )
 
 celery = Celery(
@@ -35,7 +38,6 @@ def cache_set(key: str, value, expire: int = 3600):
     redis.set(key, json.dumps(value, default=str), ex=expire)
 
 
-    
 def cache_get(key: str):
     """Get a key from Redis (returns Python dict if JSON)."""
     val = redis.get(key)

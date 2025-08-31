@@ -1,10 +1,12 @@
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
+
+from src import logger
 from src.database import get_database
-from src.routes.utils import security
-from src.services import jobs as jobs_service
+from src.redis import cache_get, cache_set, cache_delete
 from src.routes.schemas import (
     JobCreate,
     JobResponse,
@@ -13,14 +15,11 @@ from src.routes.schemas import (
     JobInDB,
     JobMetricsRequest,
     JobUpdate,
-
 )
-from src.services.jobs import check_and_update_jobs
-from src.redis import cache_get, cache_set, cache_delete
+from src.routes.utils import security
+from src.services import jobs as jobs_service
 from src.services.job_metrics import update_all_jobs_metrics
-from src import logger
-from fastapi import Depends, Body
-
+from src.services.jobs import check_and_update_jobs
 
 
 router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
@@ -46,7 +45,8 @@ async def create_job(
     try:
         form_id = await jobs_service.extract_form_id(str(payload.form_link))
         sheet_link = jobs_service.create_sheet_for_job(
-            form_id=form_id, job_title=payload.job_designation
+            form_id=form_id,
+            job_title=payload.job_designation,
         )
 
         result = await jobs_service.create_job_with_links(
@@ -230,7 +230,7 @@ async def update_all_metrics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update all metrics",
         )
-    
+
 
 @router.put("/update/{job_id}", response_model=JobResponse)
 async def update_job(
@@ -247,16 +247,16 @@ async def update_job(
         )
 
     try:
-  
-        existing_job = await db.jobs.find_one({"_id": (job_id)})
+        existing_job = await db.jobs.find_one({"_id": job_id})
         if not existing_job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Job not found",
             )
 
-        
-        update_data = {k: v for k, v in payload.model_dump().items() if v is not None}
+        update_data = {
+            k: v for k, v in payload.model_dump().items() if v is not None
+        }
         if not update_data:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -264,13 +264,13 @@ async def update_job(
             )
 
         await db.jobs.update_one(
-            {"_id": (job_id)},
+            {"_id": job_id},
             {"$set": update_data},
         )
 
         cache_delete("jobs:all")
 
-        updated_job = await db.jobs.find_one({"_id": (job_id)})
+        updated_job = await db.jobs.find_one({"_id": job_id})
         updated_job["_id"] = str(updated_job["_id"])
         return JobResponse(**updated_job)
     except HTTPException:
@@ -280,4 +280,4 @@ async def update_job(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update job",
-        )    
+        )

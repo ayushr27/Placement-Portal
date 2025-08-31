@@ -1,18 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Path
-from src.routes.utils import security
-from src.routes.schemas import (
-    UserResponseStudent,
-    UserResponseAdmin,
-    AdminEditStudentProfile, StudentEditProfile
-)
-from src.services.schemas import StudentInDB
 
 from bson.regex import Regex
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
+
 from src.database import get_database
-from src.services.schemas import AdminInDB
-from src.redis import cache_get, cache_set, cache_delete  # import redis utils
-from datetime import datetime
+from src.redis import cache_delete, cache_get, cache_set
+from src.routes.schemas import (
+    StudentEditProfile,
+    UserResponseAdmin,
+    UserResponseStudent,
+)
+from src.routes.utils import security
+
 router = APIRouter(prefix="/profile", tags=["Profiles"])
 
 
@@ -20,21 +19,18 @@ router = APIRouter(prefix="/profile", tags=["Profiles"])
 async def get_student_profile(current_user: dict = Depends(security.get_current_user)):
     """
     Retrieve the current student's profile.
-
     Uses Redis caching for faster repeated access.
     """
-
     if current_user.get("role") != "student":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Only students can access this endpoint"
+            detail="Access denied: Only students can access this endpoint",
         )
 
     cache_key = f"profile:student:{current_user.get('_id')}"
     cached = cache_get(cache_key)
-    
     if cached:
-        return cached  
+        return cached
 
     profile = {
         "_id": str(current_user.get("_id")),
@@ -61,13 +57,10 @@ async def get_student_profile(current_user: dict = Depends(security.get_current_
         "mtech_cgpa": current_user.get("mtech_cgpa"),
         "backlogs": current_user.get("backlogs", 0),
         "has_edited_profile": current_user.get("has_edited_profile", False),
-
-
     }
 
-    #save to redis with TTL (1 hour)
+    # Save to redis with TTL (1 hour)
     cache_set(cache_key, profile, expire=3600)
-
     return profile
 
 
@@ -75,14 +68,12 @@ async def get_student_profile(current_user: dict = Depends(security.get_current_
 async def get_admin_profile(current_user: dict = Depends(security.get_current_user)):
     """
     Retrieve the current admin's profile.
-
     Uses Redis caching for faster repeated access.
     """
-
     if current_user.get("role") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Only admin can access this endpoint"
+            detail="Access denied: Only admin can access this endpoint",
         )
 
     cache_key = f"profile:admin:{current_user.get('id')}"
@@ -99,41 +90,38 @@ async def get_admin_profile(current_user: dict = Depends(security.get_current_us
     }
 
     cache_set(cache_key, profile, expire=3600)
-
     return profile
+
 
 @router.put("/admin/student_update/{roll_number}", response_model=UserResponseStudent)
 async def admin_update_student_profile(
-    update: StudentEditProfile=Depends(), 
+    update: StudentEditProfile = Depends(),
     roll_number: str = Path(..., description="Roll number of the student to update"),
     db: AsyncIOMotorDatabase = Depends(get_database),
-    current_user: dict = Depends(security.get_current_user)
+    current_user: dict = Depends(security.get_current_user),
 ):
-    
     if current_user.get("role") != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
 
-  
     update_data = {
         k: v for k, v in update.model_dump(exclude_unset=True).items() if v is not None
     }
-
     if not update_data:
         raise HTTPException(status_code=400, detail="No valid fields to update")
 
-  
     result = await db.students.update_one(
-        {"roll_number": Regex(f"^{roll_number}$", "i")},
-        {"$set": update_data}
+        {"roll_number": Regex(f"^{roll_number}$", "i")}, {"$set": update_data}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    
     cache_delete(f"profile:student:{roll_number}")
 
-    
-    updated_student = await db.students.find_one({"roll_number": Regex(f"^{roll_number}$", "i")})
+    updated_student = await db.students.find_one(
+        {"roll_number": Regex(f"^{roll_number}$", "i")}
+    )
     profile_response = {
         "_id": str(updated_student["_id"]),
         "name": updated_student.get("name"),
@@ -159,55 +147,53 @@ async def admin_update_student_profile(
         "mtech_cgpa": updated_student.get("mtech_cgpa"),
         "backlogs": updated_student.get("backlogs", 0),
         "has_edited_profile": updated_student.get("has_edited_profile", False),
-
-
     }
     return UserResponseStudent(**profile_response)
 
 
 @router.put("/student/update", response_model=UserResponseStudent)
 async def update_student_profile(
-    update: StudentEditProfile = Depends(),  
+    update: StudentEditProfile = Depends(),
     db: AsyncIOMotorDatabase = Depends(get_database),
-    current_user: dict = Depends(security.get_current_user)
+    current_user: dict = Depends(security.get_current_user),
 ):
-    
     if current_user.get("role") != "student":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
 
-   
     roll_number = current_user.get("roll_number")
-    student = await db.students.find_one({"roll_number": Regex(f"^{roll_number}$", "i")})
-
+    student = await db.students.find_one(
+        {"roll_number": Regex(f"^{roll_number}$", "i")}
+    )
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
     if student.get("has_edited_profile", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Profile can only be edited once. Contact Training and Placement Cell for further changes."
+            detail=(
+                "Profile can only be edited once. "
+                "Contact Training and Placement Cell for further changes."
+            ),
         )
 
-   
     update_data = update.model_dump(exclude_unset=True)
     if not update_data:
         raise HTTPException(status_code=400, detail="No valid fields to update")
 
     update_data["has_edited_profile"] = True
-
     result = await db.students.update_one(
-        {"roll_number": Regex(f"^{roll_number}$", "i")},
-        {"$set": update_data}
+        {"roll_number": Regex(f"^{roll_number}$", "i")}, {"$set": update_data}
     )
-
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    
     cache_delete(f"profile:student:{roll_number}")
 
-  
-    updated_student = await db.students.find_one({"roll_number": Regex(f"^{roll_number}$", "i")})
+    updated_student = await db.students.find_one(
+        {"roll_number": Regex(f"^{roll_number}$", "i")}
+    )
     profile_response = {
         "_id": str(updated_student["_id"]),
         "name": updated_student.get("name"),
@@ -234,7 +220,6 @@ async def update_student_profile(
         "backlogs": updated_student.get("backlogs", 0),
         "has_edited_profile": updated_student.get("has_edited_profile", True),
     }
-
     return UserResponseStudent(**profile_response)
 
 
@@ -242,19 +227,19 @@ async def update_student_profile(
 async def get_student_profile_by_admin(
     roll_number: str,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    current_user: dict = Depends(security.get_current_user)
+    current_user: dict = Depends(security.get_current_user),
 ):
-    
     if current_user.get("role") != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
 
-    student = await db.students.find_one({
-    "roll_number": Regex(f"^{roll_number}$", "i") 
-})
+    student = await db.students.find_one(
+        {"roll_number": Regex(f"^{roll_number}$", "i")}
+    )
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-   
     profile_response = {
         "_id": str(student["_id"]),
         "name": student.get("name"),
@@ -281,5 +266,4 @@ async def get_student_profile_by_admin(
         "backlogs": student.get("backlogs", 0),
         "has_edited_profile": student.get("has_edited_profile", False),
     }
-
     return UserResponseStudent(**profile_response)
