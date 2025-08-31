@@ -12,7 +12,6 @@ from src.routes.schemas import (
     MasterSheetInDB,
     MasterSheetResponse,
     JobInDB,
-    JobMetricsRequest,
     JobUpdate,
 )
 from src.routes.utils import security
