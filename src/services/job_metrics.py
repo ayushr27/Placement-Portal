@@ -87,7 +87,7 @@ async def update_or_create_job_metrics(
     try:
         job_id = str(job["_id"])
         deadline = job.get("application_deadline")
-        if deadline and deadline < datetime.now(timezone.utc):
+        if deadline and deadline.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
             return False   # Skip expired jobs
 
         existing_metrics = await db.job_metrics.find_one({"job_id": job_id})

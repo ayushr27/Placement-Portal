@@ -46,7 +46,7 @@ async def create_job(
     try:
         form_id = await jobs_service.extract_form_id(str(payload.form_link))
         sheet_link = jobs_service.create_sheet_for_job(
-            form_id=form_id, job_title=payload.title
+            form_id=form_id, job_title=payload.job_designation
         )
 
         result = await jobs_service.create_job_with_links(

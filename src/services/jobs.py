@@ -45,6 +45,7 @@ async def check_and_update_jobs(db: AsyncIOMotorDatabase):
     expired_jobs = db.jobs.find(
         {"application_deadline": {"$lte": now}, "synced": {"$ne": True}}
     )
+    print(expired_jobs)
 
     async for job in expired_jobs:
         try:
@@ -141,12 +142,12 @@ async def sync_responses_to_master(
             spreadsheetId=job_doc.master_sheet_id, range="Sheet1!1:1"
         ).execute().get("values", [[]])[0]
 
-        if job_doc.company not in header:
+        if job_doc.company_name not in header:
             raise Exception(
-                f"Column for {job_doc.company} not found in master sheet"
+                f"Column for {job_doc.company_name} not found in master sheet"
             )
 
-        col_index = header.index(job_doc.company)
+        col_index = header.index(job_doc.company_name)
         col_letter = chr(ord("A") + col_index)
 
         roll_nums = sheet.values().get(
@@ -293,29 +294,23 @@ async def _ensure_company_column(
 
 
 def create_sheet_for_job(form_id: str, job_title: str) -> str:
-    """
-    Create a Google Sheet for a job using an Apps Script endpoint.
-
-    Args:
-        form_id (str): The Google Form ID.
-        job_title (str): The job title.
-
-    Returns:
-        str: URL of the created sheet.
-
-    Raises:
-        Exception: If sheet creation fails.
-    """
     try:
         payload = {"formId": form_id, "jobTitle": job_title}
-        response = requests.post(APPS_SCRIPT_URL, json=payload)
+        logger.info(f"Creating sheet via {APPS_SCRIPT_URL} with payload: {payload}")
+        response = requests.post(APPS_SCRIPT_URL, json=payload, timeout=15)
+        logger.info(f"Sheet creation response: {response.status_code}, {response.text}")
+
         if response.status_code == 200:
-            return response.json().get("sheetUrl")
-        raise Exception("Failed to create sheet")
+            data = response.json()
+            sheet_url = data.get("sheetUrl")
+            if not sheet_url:
+                raise Exception("sheetUrl missing in response")
+            return sheet_url
+
+        raise Exception(f"Apps Script returned {response.status_code}: {response.text}")
     except Exception as e:
         logger.error("Error creating sheet for job %s: %s", job_title, str(e))
         raise
-
 
 async def create_job_with_links(
     db: AsyncIOMotorDatabase,
@@ -338,7 +333,7 @@ async def create_job_with_links(
     Raises:
         HTTPException: If required job data is missing.
     """
-    if not job_data.title or not job_data.company or not job_data.form_link:
+    if not job_data.job_designation or not job_data.company_name or not job_data.form_link:
         logger.error("Missing required job data: %s", job_data)
         raise HTTPException(
             status_code=400, detail="Title, company, and form link are required"
@@ -346,7 +341,7 @@ async def create_job_with_links(
 
     admin_doc = await _get_admin_doc(db, current_admin_username)
     master_sheet_id = await _get_or_create_master_sheet(db, admin_doc, job_data.batch)
-    await _ensure_company_column(admin_doc, master_sheet_id, job_data.company)
+    await _ensure_company_column(admin_doc, master_sheet_id, job_data.company_name)
 
     now_iso = datetime.now(ist).isoformat()
 
@@ -364,8 +359,8 @@ async def create_job_with_links(
                     [
                         now_iso,
                         ",".join(str(b) for b in job_data.batch),
-                        job_data.company,
-                        job_data.title,
+                        job_data.company_name,
+                        job_data.job_designation,
                         job_data.form_link,
                         responses_sheet_link,
                     ]
@@ -377,24 +372,34 @@ async def create_job_with_links(
         raise
 
     job_doc = JobInDB(
-        id=str(ObjectId()),
-        title=job_data.title,
-        company=job_data.company,
-        batch=job_data.batch,
-        form_link=job_data.form_link,
-        responses_sheet_link=responses_sheet_link,
-        gender_preference=job_data.gender_preference,
-        CG_Cutoff=job_data.CG_Cutoff,
-        application_deadline=job_data.application_deadline,
-        location=job_data.location,
-        job_description=job_data.job_description,
-        created_by=admin_doc.get("email") or admin_doc.get("username"),
-        created_at=datetime.now(ist),
-        updated_at=datetime.now(ist),
-        master_sheet_id=master_sheet_id,
-        master_sheet_link=f"https://docs.google.com/spreadsheets/d/{master_sheet_id}",
-        synced=False,
-    )
+    id=str(ObjectId()),
+    company_name=job_data.company_name,
+    website=job_data.website,
+    linkedin_link=job_data.linkedin_link,
+    address=job_data.address,
+    batch=job_data.batch,
+    work_location=job_data.work_location,
+    job_designation=job_data.job_designation,
+    type_of_employment=job_data.type_of_employment,
+    eligibility_criteria=job_data.eligibility_criteria,
+    applicable_branch=job_data.applicable_branch,
+    stipend=job_data.stipend,
+    ctc=job_data.ctc,
+    other_benefits=job_data.other_benefits,
+    bond=job_data.bond,
+    job_description=job_data.job_description,
+    about_company=job_data.about_company,
+    selection_process=job_data.selection_process,
+    form_link=job_data.form_link,
+    application_deadline=job_data.application_deadline,
+    created_by=admin_doc.get("email") or admin_doc.get("username"),
+    created_at=datetime.now(ist),
+    updated_at=datetime.now(ist),
+    responses_sheet_link=responses_sheet_link,
+    master_sheet_id=master_sheet_id,
+    master_sheet_link=f"https://docs.google.com/spreadsheets/d/{master_sheet_id}",
+    synced=False,
+)
 
     try:
         await db.jobs.insert_one(job_doc.model_dump(by_alias=True))
@@ -403,16 +408,32 @@ async def create_job_with_links(
         raise
 
     return JobResponse(
-        id=job_doc.id,
-        title=job_doc.title,
-        company=job_doc.company,
-        batch=job_doc.batch,
-        location=job_doc.location,
-        application_deadline=job_doc.application_deadline,
-        gender_preference=job_doc.gender_preference,
-        CG_Cutoff=job_doc.CG_Cutoff,
-        form_link=job_doc.form_link,
-        responses_sheet_link=job_doc.responses_sheet_link,
-        master_sheet_id=job_doc.master_sheet_id,
-        master_sheet_link=job_doc.master_sheet_link,
-    )
+    id=job_doc.id,
+    company_name=job_doc.company_name,
+    website=job_doc.website,
+    linkedin_link=job_doc.linkedin_link,
+    address=job_doc.address,
+    batch=job_data.batch,
+    work_location=job_doc.work_location,
+    job_designation=job_doc.job_designation,
+    type_of_employment=job_doc.type_of_employment,
+    eligibility_criteria=job_doc.eligibility_criteria,
+    applicable_branch=job_doc.applicable_branch,
+    stipend=job_doc.stipend,
+    ctc=job_doc.ctc,
+    other_benefits=job_doc.other_benefits,
+    bond=job_doc.bond,
+    job_description=job_doc.job_description,
+    about_company=job_doc.about_company,
+    selection_process=job_doc.selection_process,
+    form_link=job_doc.form_link,
+    application_deadline=job_doc.application_deadline,
+    responses_sheet_link=job_doc.responses_sheet_link,
+    master_sheet_id=job_doc.master_sheet_id,
+    master_sheet_link=job_doc.master_sheet_link,
+    synced=job_doc.synced,
+    created_by=job_doc.created_by,
+    created_at=job_doc.created_at,
+    updated_at=job_doc.updated_at,
+)
+

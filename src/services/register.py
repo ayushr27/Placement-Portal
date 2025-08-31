@@ -27,21 +27,10 @@ def generate_random_password(length: int = 8) -> str:
 
 
 async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> dict:
-    """
-    Process a CSV file containing student details, insert them into the database,
-    and send credentials via email.
-
-    Args:
-        db (AsyncIOMotorDatabase): MongoDB database instance.
-        file_bytes (bytes): Raw CSV file data.
-
-    Returns:
-        dict: Summary of inserted students and their emails.
-    """
     csv_text = file_bytes.decode("utf-8")
     reader = csv.DictReader(io.StringIO(csv_text))
 
-    required = {"name", "email", "roll_number", "branch", "batch", "course"}
+    required = {"name", "email", "roll_number"}  # batch, branch, course optional now
     to_insert, creds_to_send = [], []
 
     for row in reader:
@@ -53,8 +42,8 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
                 name=row["name"].strip(),
                 email=row["email"].strip(),
                 roll_number=row["roll_number"].strip(),
-                branch=row["branch"].strip(),
-                batch=int(row["batch"]),
+                branch=row.get("branch", "").strip() or None,
+                batch=int(row["batch"]) if row.get("batch") else None,
                 course=row.get("course", "").strip() or None,
                 gender=row.get("gender", "").strip() or None,
                 phone_no=row.get("phone_no", "").strip() or None,
@@ -70,7 +59,7 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
             name=student_create.name,
             gender=student_create.gender,
             email=student_create.email,
-            username=student_create.email,
+            username=student_create.email,  # email as username
             roll_number=student_create.roll_number,
             branch=student_create.branch,
             course=student_create.course,
@@ -78,9 +67,10 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
             phone_no=student_create.phone_no,
             hashed_password=security.hash_password(student_create.password),
             role="student",
+            
         )
 
-        to_insert.append(student_in_db.model_dump(exclude={"id"}))
+        to_insert.append(student_in_db.model_dump(by_alias=True, exclude={"id"}))
         creds_to_send.append({
             "name": student_in_db.name,
             "email": student_in_db.email,
@@ -94,7 +84,6 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
         # Send mails in batches
         for i in range(0, len(creds_to_send), BATCH_SIZE):
             batch = creds_to_send[i:i + BATCH_SIZE]
-
             for cred in batch:
                 subject = "Your Student Account Credentials"
                 body = ACCOUNT_CREATION_EMAIL_BODY.format(
