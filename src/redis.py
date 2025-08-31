@@ -32,9 +32,10 @@ celery.conf.update(
 
 def cache_set(key: str, value, expire: int = 3600):
     """Set a key in Redis with optional expiry (default: 1 hour)."""
-    redis.set(key, json.dumps(value), ex=expire)
+    redis.set(key, json.dumps(value, default=str), ex=expire)
 
 
+    
 def cache_get(key: str):
     """Get a key from Redis (returns Python dict if JSON)."""
     val = redis.get(key)
