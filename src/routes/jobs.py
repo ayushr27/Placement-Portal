@@ -1,6 +1,5 @@
 from typing import List
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 
@@ -162,13 +161,12 @@ async def get_all_master_sheets(
         )
 
 
-@router.get("/job_metrics/{job_id}")
+@router.get("/job_metrics")
 async def get_job_metrics(
-    jobid: JobMetricsRequest,
+    jobid: str = Query(..., description="ID of the job to fetch metrics for"),
     db: AsyncIOMotorDatabase = Depends(get_database),
     current_user: dict = Depends(security.get_current_user),
 ):
-    job_id = jobid.job_id
     if current_user.get("role") != "admin":
         logger.warning(f"Unauthorized metrics view attempt by {current_user}")
         raise HTTPException(
@@ -177,7 +175,7 @@ async def get_job_metrics(
         )
 
     try:
-        metrics = await db.job_metrics.find_one({"job_id": job_id})
+        metrics = await db.job_metrics.find_one({"job_id": jobid})
         if not metrics:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -188,7 +186,7 @@ async def get_job_metrics(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching metrics for job {job_id}: {e}")
+        logger.error(f"Error fetching metrics for job {jobid}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch job metrics",
