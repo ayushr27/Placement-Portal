@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 import pytz
@@ -80,9 +80,9 @@ class Token(BaseModel):
 class JobCreate(BaseModel):
     title: str = Field(..., min_length=2, max_length=200)
     company: str = Field(..., min_length=2, max_length=200)
-    batch: list[int] = Field(..., min_items=1, max_items=4)
+    batch: list[int] = Field(..., min_length=1, max_length=4)
     CG_Cutoff: Optional[float] = Field(None, ge=0.0, le=10.0)
-    gender_preference: Optional[List[str]] = Field(None, min_items=1, max_items=2)
+    gender_preference: Optional[List[str]] = Field(None, min_length=1, max_length=2)
     location: Optional[str] = Field(None, min_length=2, max_length=200)
     form_link: str = Field(..., min_length=5, max_length=500)
     application_deadline: Optional[datetime] = None
@@ -99,12 +99,11 @@ class JobInDB(JobCreate):
     master_sheet_link: str
     synced: bool = False
 
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {
-            ObjectId: str
-        }
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str},
+    )
 
 
 class JobResponse(BaseModel):
@@ -121,12 +120,11 @@ class JobResponse(BaseModel):
     master_sheet_id: str
     master_sheet_link: str
 
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {
-            ObjectId: str
-        }
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str},
+    )
 
 
 class JobMetricsRequest(BaseModel):
