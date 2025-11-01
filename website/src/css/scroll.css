@@ -1,0 +1,30 @@
+/* Apply custom scrollbar to full page */
+html, body {
+  scrollbar-width: thin;
+  scrollbar-color: #475569 #f3f4f6; /* dark thumb, light track */
+  scroll-behavior: smooth;
+}
+
+/* For Chrome, Edge, Safari */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 10px;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+  background: #f3f4f6; /* light gray track */
+  border-radius: 9999px;
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #475569, #334155); /* slate gradient */
+  border-radius: 9999px;
+  transition: background 0.3s ease-in-out;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #334155, #1e293b); /* darker on hover */
+}

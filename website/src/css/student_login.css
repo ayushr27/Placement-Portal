@@ -1,0 +1,92 @@
+.login {
+  height: 100vh;
+  background: #181204;
+  overflow: hidden;
+  position: relative; /* Ensure vectors position relative to login container */
+}
+
+/* Base styles - large screens */
+.vector6 {
+  position: absolute;
+  width: 30vw;
+  height: auto;
+  right: 0;
+  top: -15vh;
+}
+
+.vector5 {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 25vw;
+  height: auto;
+}
+
+.vector4 {
+  position: absolute;
+  width: 28vw;
+  height: auto;
+  left: 40vw;
+  top: 40vh;
+}
+
+.vector3 {
+  position: absolute;
+  width: 15vw;
+  height: auto;
+  right: 0;
+  top: 25vh;
+}
+
+.vector2 {
+  position: absolute;
+  width: 18vw;
+  height: auto;
+  right: 28vw;
+  top: -15vh;
+  z-index: 10;
+  transform: rotate(-49.89deg);
+}
+
+.vector1 {
+  position: absolute;
+  width: 18vw;
+  height: auto;
+  right: 35vw;
+  bottom: 0;
+  transform: rotate(-49.89deg);
+}
+
+/* Medium screens */
+@media (max-width: 1024px) {
+  .vector6 {
+    width: 35vw;
+    top: -12vh;
+  }
+  .vector5 {
+    width: 30vw;
+  }
+  .vector4 {
+    width: 35vw;
+    left: 35vw;
+    top: 45vh;
+  }
+  .vector2 {
+    right: 20vw;
+  }
+  .vector1 {
+    right: 25vw;
+  }
+}
+
+@media (max-width: 640px) {
+  .vector6,
+  .vector5,
+  .vector4,
+  .vector3,
+  .vector2,
+  .vector1,
+  .right-section {
+    display: none; /* hides completely */
+  }
+}
