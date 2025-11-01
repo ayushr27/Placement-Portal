@@ -1,0 +1,20 @@
+{
+  "name": "Placement Portal Dev Container",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "server",
+  "workspaceFolder": "/app",
+  "forwardPorts": [8000],
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "ms-python.python",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+  "postCreateCommand": "pip install -r requirements.txt",
+  "shutdownAction": "stopCompose"
+}

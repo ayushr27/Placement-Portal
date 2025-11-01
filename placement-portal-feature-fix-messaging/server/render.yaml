@@ -1,0 +1,41 @@
+services:
+  # Your API
+  - type: web
+    name: myapp-web
+    env: docker
+    plan: free
+    dockerCommand: ./run.sh
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          name: myapp-redis
+          type: redis
+
+  # Celery worker
+  - type: worker
+    name: myapp-celery
+    env: docker
+    plan: free
+    dockerCommand: celery -A task.celery worker --loglevel=info
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          name: myapp-redis
+          type: redis
+
+  # (Optional) Celery Beat scheduler
+  - type: worker
+    name: myapp-beat
+    env: docker
+    plan: free
+    dockerCommand: celery -A task.celery beat --loglevel=info
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          name: myapp-redis
+          type: redis
+
+databases:
+  - name: myapp-redis
+    plan: free
+    ipAllowList: []   # open to your services

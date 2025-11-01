@@ -1,0 +1,6 @@
+fastapi
+flake8
+uvicorn
+gunicorn
+pytest
+httpx

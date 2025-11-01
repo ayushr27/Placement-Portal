@@ -1,0 +1,330 @@
+\documentclass[14pt]{extarticle}
+
+% ---------------- Packages ----------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage[margin=1in]{geometry}
+\usepackage{parskip}
+\usepackage{setspace}
+\usepackage{times}
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usepackage{everypage}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{booktabs}
+\usepackage{float}
+% ---------------- Hyperref ----------------
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  pdftitle={System Document - Job Portal \& Placement Site (Student Side)},
+  pdfauthor={Dhruv Singh, Paarth Batra, Arnav Sharda, Ayush Rahate}
+}
+
+% ---------------- Layout ----------------
+\setstretch{1.08}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlist[itemize]{topsep=2pt, itemsep=1pt, left=1.5em}
+\setlist[enumerate]{topsep=3pt, itemsep=1pt, left=1.5em}
+
+\titlespacing*{\section}{0pt}{10pt plus 2pt minus 2pt}{5pt plus 1pt minus 1pt}
+\titlespacing*{\subsection}{0pt}{8pt plus 2pt minus 1pt}{3pt plus 1pt minus 1pt}
+\titlespacing*{\subsubsection}{0pt}{6pt plus 1pt minus 1pt}{2pt plus 1pt minus 1pt}
+
+\setcounter{tocdepth}{3}
+\setcounter{secnumdepth}{3}
+
+% ---------------- Decorative border ----------------
+\AddEverypageHook{%
+  \begin{tikzpicture}[remember picture, overlay]
+    \draw[line width=1pt]
+      ($(current page.north west) + (0.4in,-0.4in)$) rectangle
+      ($(current page.south east) + (-0.4in,0.4in)$);
+  \end{tikzpicture}
+}
+
+% ---------------- Document ----------------
+\begin{document}
+
+% ---------------- Cover page ----------------
+\begin{titlepage}
+  \begin{center}
+    \vspace*{1.2cm}
+    \includegraphics[width=5cm]{logo.jpeg}\\[0.6cm]
+    {\Huge \textbf{Department of Computer Science}}\\[0.5cm]
+    {\LARGE \textbf{Software Engineering Practice (CS 306)}}\\[1.2cm]
+    {\Huge \textbf{System Document Report}}\\[0.3cm]
+    {\LARGE \textbf{Title: Job Portal \& Placement Site}}\\[2.5cm]
+
+    {\Large \textbf{Team:}}\\
+    {\large Paarth Batra, Arnav Sharda, Dhruv Singh, Ayush Rahate}\\[0.8cm]
+
+    {\Large \textbf{Supervisor:}}\\
+    {\large Dr. V. Siva Rama Krishniah}\\[0.8cm]
+
+    {\large October 2025}
+    \vfill
+  \end{center}
+\end{titlepage}
+
+\clearpage
+\tableofcontents
+\clearpage
+
+% ---------------- Main Content ----------------
+
+\section{Introduction and Objectives}
+The \textbf{Job Portal \& Placement Site} aims to modernize and simplify the campus recruitment and placement process. This web-based system provides an interactive, secure, and efficient interface for students to browse available opportunities, apply for roles, and manage their placement activities in one place.
+
+The \textbf{student-side module} specifically focuses on providing a seamless experience where students can access filtered job listings, check their eligibility automatically, and monitor application progress efficiently. It minimizes manual work and communication gaps between students and placement coordinators.
+
+\subsection*{Objectives}
+\begin{itemize}
+  \item Provide a unified and responsive dashboard for all student placement activities.
+  \item Ensure transparency in job eligibility, applications, and results.
+  \item Enable efficient job filtering, searching, and application features.
+  \item Deliver personalized insights, including ATS-based resume evaluation.
+\end{itemize}
+
+\section{Technology Used}
+
+\subsection{Hardware Requirements}
+The system is lightweight and web-based, ensuring compatibility across multiple devices:
+\begin{itemize}
+  \item \textbf{Client Devices:} Any system or smartphone capable of running a modern web browser (Chrome, Edge, Firefox).
+  \item \textbf{Server Requirements:} 
+  \begin{itemize}
+    \item CPU: Quad-core processor or higher.
+    \item RAM: Minimum 16 GB.
+    \item Storage: SSD (minimum 512 GB).
+    \item Bandwidth: Minimum 100 Mbps network connectivity.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Software Requirements}
+The system uses a full-stack development architecture:
+\begin{itemize}
+  \item \textbf{Frontend:} ReactJS with Tailwind CSS for fast and modern UI development.
+  \item \textbf{Backend:} FastAPI for building high-performance RESTful APIs.
+  \item \textbf{Database:} MongoDB for managing student profiles, job listings, and applications.
+  \item \textbf{Authentication:} JWT-based secure login system.
+  \item \textbf{Version Control:} GitHub for source code management and CI/CD.
+  \item \textbf{Integration:} Google APIs (Sheets and Forms) for job data management.
+\end{itemize}
+
+\subsection{Deployment Details}
+The application is deployed using a \textbf{hybrid cloud approach}:
+\begin{itemize}
+  \item \textbf{Frontend:} Deployed on \textbf{Vercel}, leveraging its global CDN for optimal loading times and auto-build deployment from GitHub.
+  \item \textbf{Backend:} Deployed on an \textbf{AWS EC2 instance} running a Dockerized FastAPI server behind an Nginx reverse proxy.
+  \item \textbf{Security:} HTTPS enabled using AWS Certificate Manager, ensuring encrypted communication.
+  \item \textbf{Scalability:} Load balancing handled via AWS Elastic Load Balancer, with auto-scaling groups to manage traffic surges.
+\end{itemize}
+
+\clearpage
+
+\section{Important Modules of the Software}
+\subsection{Student Home Module}
+\begin{itemize}
+  \item Personalized dashboard showing relevant jobs, profile completion status, and application summary.
+  \item Filtering-based job search and application for students, enabling them to refine listings by company, salary, department, and eligibility.
+  \item Quick navigation to important sections like profile editing, job listings, and ATS checker.
+  
+\end{itemize}
+
+\subsection{Profile Management Module}
+\begin{itemize}
+  \item Allows students to enter and update personal, academic, and technical skill information.
+  \item Ensures data consistency through form validation and real-time verification.
+  \item Automatic eligibility recalculation based on academic parameters.
+  \item Coordinators can approve or reject modifications to ensure data accuracy.
+\end{itemize}
+
+\subsection{Job Listings \& Application Module}
+\begin{itemize}
+  \item Displays live job openings from recruiters integrated via Google Forms or admin uploads.
+  \item Filtering options by company, role type, CGPA, and department.
+  \item Students can apply directly through integrated job links.
+  \item Each job displays eligibility criteria, salary, and application deadline.
+  \item Status updates reflect in real time, showing "Applied," "Shortlisted," or "Selected."
+\end{itemize}
+
+\subsection{ATS Resume Checker Module}
+\begin{itemize}
+  \item The \textbf{ATS (Applicant Tracking System) Checker} evaluates resumes by comparing them against the job description.
+  \item It analyzes keyword relevance, skills overlap, and section completeness.
+  \item Outputs:
+  \begin{itemize}
+    \item \textbf{ATS Score:} A numerical match percentage.
+    \item \textbf{Job Fitness Rating:} Qualitative insights on resume suitability.
+    \item \textbf{Improvement Suggestions:} Recommendations for keyword additions or structural improvements.
+  \end{itemize}
+  \item This helps students tailor their resumes to increase their selection probability.
+\end{itemize}
+
+\subsection{Notifications Module}
+\begin{itemize}
+  
+  \item Built using an SMTP-based backend mailer integrated with FastAPI.
+  \item Ensures all users receive verified and relevant placement communication.
+\end{itemize}
+
+\section{Inputs to be Captured from the System}
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Input Type} & \textbf{Description / Format} \\ \midrule
+Login Credentials & Email, Password (Encrypted via JWT) \\
+Profile Details & Name, Roll No, Department, CGPA, Backlogs \\
+Skills and Projects & Text fields with validation \\
+Job Applications & Job ID, Timestamp, Eligibility Status \\
+ATS Inputs & Resume (PDF) and Job Description (Text) \\ 
+ \bottomrule
+\end{tabular}
+\caption{Input Formats Captured from the Student System}
+\end{table}
+
+\section{Types of Queries the System Can Handle}
+
+The system is designed to handle a variety of queries from students, recruiters, and administrators efficiently. Key query types include:
+
+\begin{itemize}
+    \item \textbf{Job Queries (Students):} 
+    \begin{itemize}
+        \item Search for jobs based on company, role, salary, location, and department.
+        \item Check eligibility criteria for specific jobs..
+    \end{itemize}
+    
+    \item \textbf{Profile Queries (Students):} 
+    \begin{itemize}
+        \item Retrieve and update personal, academic, and skill information.
+        \item Check profile completion and verification status.
+    \end{itemize}
+    
+    \item \textbf{Data Queries (Students):} 
+    \begin{itemize}
+        \item Generate ATS resume feedback and job fitness reports.
+        \item View historical application data and dashboard summaries.
+    \end{itemize}
+    
+    \item \textbf{Candidate Queries (Recruiters):} 
+    \begin{itemize}
+        \item Access verified student profiles matching job requirements.
+        \item Filter candidates based on CGPA, department, and skills.
+    \end{itemize}
+    
+    \item \textbf{Process Queries (Recruiters):} 
+    \begin{itemize}
+        \item Retrieve recruitment process guidelines and timelines.
+        \item Communicate with placement cell for clarifications or updates.
+    \end{itemize}
+    
+   
+\end{itemize}
+
+\section{Important Outputs of the System}
+
+The system generates multiple outputs that help students, coordinators, recruiters, and administrators monitor and manage placement activities efficiently. Key outputs include:
+
+\subsection{Student-Based Outputs}
+\begin{itemize}
+    \item \textbf{Profile Data:} Student's personal, academic, and technical skill information.
+    \item \textbf{Job Listings:} Filtered list of available jobs relevant to the student's eligibility.
+    \item \textbf{Job Details:} Eligibility criteria, salary, deadlines, and company information.
+    \item \textbf{Application Forms:} Ability to apply for eligible jobs directly through the system.
+    \item \textbf{ATS Resume Feedback:} ATS score, job fitness rating, and improvement suggestions for uploaded resumes.
+\end{itemize}
+
+\subsection{General Outputs (Placement Cell \& Administrators)}
+\begin{itemize}
+    \item \textbf{Latest Placement Updates:} Notifications and announcements from the placement cell.
+    \item \textbf{Updated Brochures:} Digital version of placement brochures for students and recruiters.
+    \item \textbf{Recruitment Process Information:} Step-by-step details provided to recruiters for smooth hiring.
+    \item \textbf{Official Messages:} Communications from Director, FIC Placement Cell, or Deputy FIC to recruiters or students.
+    \item \textbf{Analytics and Reports:} Summary metrics,  administrators and placement coordinators.
+\end{itemize}
+
+\section{Security Features and Testing}
+
+\subsection{Implemented Security Features}
+\begin{itemize}
+  \item JWT tokens for authentication and session handling.
+  \item Bcrypt for password hashing and protection against brute force attacks.
+  \item Role-based access control to restrict unauthorized API access.
+  \item HTTPS communication to prevent man-in-the-middle attacks.
+  \item Input sanitization to protect against SQL/NoSQL injection.
+\end{itemize}
+
+\subsection{Testing Details}
+To validate performance, the system underwent \textbf{Locust-based stress testing}.  
+The test simulated 500 concurrent users performing operations such as login, job fetching, and profile access.
+
+Results:
+\begin{itemize}[itemsep=1pt, topsep=1pt, parsep=0pt, partopsep=0pt]
+  \item Average RPS: 183.6 (Requests per Second)
+  \item Failure Rate: 1\%
+  \item Median Response Time: 140 ms
+\end{itemize}
+
+In addition, user testing was conducted with 30 students. They evaluated usability, performance, and responsiveness on multiple devices. Feedback confirmed the interface was smooth, intuitive, and visually clear.
+
+\section{Interfaces and Interface Testing}
+
+\subsection{User Interfaces}
+\begin{itemize}
+  \item \textbf{Home Page:} Displays current openings and announcements.
+  \item \textbf{Dashboard:} Shows recommended jobs and active applications.
+  \item \textbf{Profile Page:} Editable sections with live validation.
+  \item \textbf{ATS Page:} Upload area for resume and job description, showing ATS results.
+  \item \textbf{Applications Page:} Displays application status with filter options.
+\end{itemize}
+
+\subsection{Interface Testing}
+\begin{itemize}
+  \item Tested across Chrome, Edge, and Firefox.
+  \item Mobile and tablet compatibility verified via responsive design testing.
+  \item Checked smooth transitions between dashboard, job listings, and ATS modules.
+  \item Conducted user feedback sessions for UX validation.
+\end{itemize}
+
+\section{Unique Features and Stakeholder Benefits}
+
+\subsection{Unique Features (Student Side)}
+\begin{itemize}
+  \item Filtering-based job search with automatic eligibility detection.
+  \item ATS-based resume evaluation with job fit insights.
+  \item Secure cloud-hosted system with AWS \& Vercel integration.
+  \item Consistent and minimal UI for improved student experience.
+\end{itemize}
+
+\subsection{Stakeholders and Benefits}
+\begin{table}[H]
+\centering
+\begin{tabular}{|p{4cm}|p{10cm}|}
+\hline
+\textbf{Stakeholder} & \textbf{Benefit} \\ \hline
+\textbf{Students} & Simplified application tracking and resume optimization. \\ \hline
+\textbf{Placement Coordinators} & Streamlined verification and reduced manual effort. \\ \hline
+\textbf{Recruiters} & Receive pre-verified and well-matched candidate data. Smooth and streamlined process for recruiting from the institute. \\ \hline
+\textbf{Institution} & Centralised placement system and improved placement transparency and digital workflow. \\ \hline
+\end{tabular}
+\caption{Stakeholder Benefits from the System}
+\end{table}
+
+
+\section{Conclusion}
+The \textbf{Job Portal \& Placement Site (Student Side)} provides a complete, secure, and scalable digital solution for managing placement workflows.  
+The inclusion of filtering-based job applications and the ATS Resume Checker gives students data-driven insights to improve job readiness.  
+With deployment on AWS and Vercel, backed by rigorous Locust testing, the system demonstrates reliability, scalability, and modern web performance suited for real institutional use.
+
+\end{document}
+
