@@ -2,6 +2,9 @@
 
 Production-ready monorepo for a college/company placement portal. This root README documents how to run, develop, and deploy the core apps kept on the `main` branch.
 
+### Deployment
+- Live site: https://placement-portal-liard.vercel.app/
+
 ### What’s in this branch
 - `server/`: backend application (Python/FastAPI or similar as per codebase)
 - `website/`: frontend application (Vite + React)
