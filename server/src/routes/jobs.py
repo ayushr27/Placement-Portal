@@ -62,6 +62,8 @@ async def create_job(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create job",
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error during job creation: {e}")
         raise HTTPException(
@@ -75,6 +77,8 @@ async def sync_expired_jobs(db: AsyncIOMotorDatabase = Depends(get_database)):
     try:
         await check_and_update_jobs(db)
         return {"status": "ok", "message": "Expired jobs synced successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error syncing expired jobs: {e}")
         raise HTTPException(
@@ -106,6 +110,8 @@ async def get_all_jobs(
             expire=3600,
         )
         return jobs_response
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching jobs: {e}")
         raise HTTPException(

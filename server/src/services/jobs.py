@@ -18,12 +18,26 @@ APPS_SCRIPT_URL = secrets.APPS_SCRIPT_URL
 
 
 async def extract_form_id(form_link: str) -> str:
-    """Extract the Google Form ID from a form link."""
-    match = re.search(r"/d/([a-zA-Z0-9_-]+)", form_link)
+    """
+    Extract the Google Form ID from a form link.
+
+    Google share links use /forms/d/e/<id>/viewform, while edit links use
+    /forms/d/<id>/edit. The previous pattern `/d/([a-zA-Z0-9_-]+)` matched the
+    literal "e" segment of the share form and returned "e" as the id, so the
+    far more common link shape silently produced a wrong id.
+    """
+    match = re.search(r"/d/e/([a-zA-Z0-9_-]+)", form_link) or re.search(
+        r"/d/([a-zA-Z0-9_-]+)", form_link
+    )
     if not match:
         logger.error("Invalid Google Form link provided: %s", form_link)
         raise ValueError("Invalid Google Form link")
-    return match.group(1)
+
+    form_id = match.group(1)
+    if form_id in {"e", "d"}:
+        logger.error("Could not parse a form id from link: %s", form_link)
+        raise ValueError("Invalid Google Form link")
+    return form_id
 
 
 async def check_and_update_jobs(db: AsyncIOMotorDatabase):
