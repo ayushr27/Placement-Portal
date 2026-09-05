@@ -2,6 +2,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -167,6 +168,27 @@ async def google_login():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate Google login URL",
+        )
+
+
+@router.get("/google-login/start")
+async def google_login_start():
+    """
+    Redirect straight to Google's consent screen.
+
+    /google-login returns the URL as JSON for the frontend to use. This variant
+    is for humans: an admin can open it directly in a browser and be taken to
+    Google, instead of copying a very long URL by hand.
+    """
+    try:
+        return RedirectResponse(url=auth_service.get_google_auth_url())
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to start Google login: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start Google login",
         )
 
 
