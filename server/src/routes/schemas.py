@@ -200,8 +200,8 @@ class JobInDB(JobCreate):
     # there is no responses sheet to link. The admin form marks the form link
     # optional, so requiring it here rejected perfectly valid postings.
     responses_sheet_link: Optional[str] = None
-    master_sheet_id: str
-    master_sheet_link: str
+    master_sheet_id: Optional[str] = None
+    master_sheet_link: Optional[str] = None
     synced: bool = False
 
     model_config = ConfigDict(
@@ -234,8 +234,8 @@ class JobResponse(BaseModel):
     form_link: Optional[str] = None
     application_deadline: Optional[datetime] = None
     responses_sheet_link: Optional[str] = None
-    master_sheet_id: str
-    master_sheet_link: str
+    master_sheet_id: Optional[str] = None
+    master_sheet_link: Optional[str] = None
     synced: Optional[bool] = False
     created_by: Optional[str] = None
     created_at: Optional[datetime] = None

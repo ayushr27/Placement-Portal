@@ -337,16 +337,31 @@ async def create_job_with_links(
         )
 
     admin_doc = await _get_admin_doc(db, current_admin_username)
-    master_sheet_id = await _get_or_create_master_sheet(
-        db, admin_doc, job_data.batch
-    )
-    await _ensure_company_column(
-        admin_doc, master_sheet_id, job_data.company_name
-    )
+
+    # Everything Google-related below is reporting scaffolding. If the admin has
+    # not linked Google, or Sheets is unavailable, the job must still be created
+    # and shown to students, so degrade instead of aborting.
+    master_sheet_id = None
+    try:
+        master_sheet_id = await _get_or_create_master_sheet(
+            db, admin_doc, job_data.batch
+        )
+        await _ensure_company_column(
+            admin_doc, master_sheet_id, job_data.company_name
+        )
+    except Exception as e:
+        logger.warning(
+            "Master sheet unavailable for %s, posting without it: %s",
+            job_data.company_name,
+            e,
+        )
+        master_sheet_id = None
 
     now_iso = datetime.now(ist).isoformat()
 
     try:
+        if not master_sheet_id:
+            raise RuntimeError("no master sheet available")
         sheets_service = google_service.get_google_service_for_admin(
             admin_doc, "sheets", "v4"
         )
@@ -369,8 +384,7 @@ async def create_job_with_links(
             },
         ).execute()
     except Exception as e:
-        logger.error("Failed to append job to JobsLog sheet: %s", str(e))
-        raise
+        logger.warning("Skipped JobsLog append: %s", str(e))
 
     job_doc = JobInDB(
         id=str(ObjectId()),
@@ -399,7 +413,10 @@ async def create_job_with_links(
         updated_at=datetime.now(ist),
         responses_sheet_link=responses_sheet_link,
         master_sheet_id=master_sheet_id,
-        master_sheet_link=f"https://docs.google.com/spreadsheets/d/{master_sheet_id}",
+        master_sheet_link=(
+            f"https://docs.google.com/spreadsheets/d/{master_sheet_id}"
+            if master_sheet_id else None
+        ),
         synced=False,
     )
 

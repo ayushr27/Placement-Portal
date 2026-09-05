@@ -42,39 +42,42 @@ async def create_job(
 
     try:
         sheet_link = None
+        sheet_warning = None
 
-        # The application form is optional. Only build a responses sheet when a
-        # link was actually supplied; previously a blank field reached
-        # extract_form_id as the string "None" and failed with the misleading
-        # "Invalid Google Form link".
-        if payload.form_link and payload.form_link.strip():
+        # Creating the responses sheet is a convenience, not a prerequisite for
+        # the posting itself. It only works for an EDIT link to a form this
+        # admin's Google account can open, so treat every failure as a warning
+        # and still save the job - otherwise an inaccessible form (or a share
+        # link, which students actually need) blocked posting entirely.
+        link = (payload.form_link or "").strip()
+        if link:
             try:
-                form_id = await jobs_service.extract_form_id(payload.form_link.strip())
+                form_id = await jobs_service.extract_form_id(link)
             except ValueError as e:
-                # e.g. a share link was pasted instead of the edit link.
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-                )
+                # A share link: perfect for students, unusable by Apps Script.
+                form_id = None
+                sheet_warning = str(e)
 
-            try:
-                sheet_link, published_url = jobs_service.create_sheet_for_job(
-                    form_id=form_id,
-                    job_title=payload.job_designation,
-                )
-            except HTTPException:
-                raise
-            except Exception as e:
-                # Apps Script failures are actionable by the admin (wrong link,
-                # form owned by another account), so pass the reason through.
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Could not create the responses sheet: {e}",
-                )
-
-            # The admin pastes the form's EDIT link so Apps Script can open it,
-            # but students must receive the public link. Swap it before saving.
-            if published_url:
-                payload.form_link = published_url
+            if form_id:
+                try:
+                    sheet_link, published_url = jobs_service.create_sheet_for_job(
+                        form_id=form_id,
+                        job_title=payload.job_designation,
+                    )
+                    # The admin pastes the EDIT link so Apps Script can open it,
+                    # but students must receive the public link.
+                    if published_url:
+                        payload.form_link = published_url
+                except Exception as e:
+                    sheet_warning = (
+                        f"The job was posted, but no responses sheet could be "
+                        f"created: {e}"
+                    )
+                    logger.warning(
+                        "Responses sheet skipped for %s: %s",
+                        payload.company_name,
+                        e,
+                    )
 
         result = await jobs_service.create_job_with_links(
             db=db,
@@ -84,6 +87,10 @@ async def create_job(
         )
         if result:
             cache_delete("jobs:all")
+            if sheet_warning:
+                # Surfaced so the admin knows the posting succeeded but the
+                # Google Sheets side did not.
+                logger.info("Job posted with warning: %s", sheet_warning)
             return result
 
         logger.error("Failed to create job (DB returned None)")
