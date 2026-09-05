@@ -3,7 +3,18 @@
 Production-ready monorepo for a college/company placement portal. This root README documents how to run, develop, and deploy the core apps kept on the `main` branch.
 
 ### Deployment
-- Live site: https://placement-portal-liard.vercel.app/
+- Frontend: https://placement-portal-web.vercel.app
+- API: https://placement-portal-api-sepia.vercel.app (Swagger UI at `/docs`)
+
+Both are deployed as separate Vercel projects from this one repository, using
+the **Root Directory** setting (`website` and `server` respectively). The
+backend runs on Vercel's Python runtime, which detects the `app` instance in
+`server/main.py` with no extra configuration.
+
+Required environment variables are documented in `server/.env.example` and
+`website/env.example.txt`. The two projects reference each other, so if a URL
+changes, update both `CORS_ORIGINS` (on the API) and `VITE_SERVER` (on the
+frontend) and redeploy.
 
 ### What’s in this branch
 - `server/`: backend application (Python/FastAPI or similar as per codebase)
