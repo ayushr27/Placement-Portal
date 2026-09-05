@@ -36,7 +36,7 @@ def profile_cache_key(roll_number: str) -> str:
     """
     Cache key for a student profile.
 
-    Lookups are case-insensitive, so `523cs0009` and `523CS0009` are the same
+    Lookups are case-insensitive, so `b21cs001` and `B21CS001` are the same
     student but used to produce two different keys - an admin editing one
     casing left the other cached and stale for an hour. Normalising here makes
     writes and invalidations agree.
