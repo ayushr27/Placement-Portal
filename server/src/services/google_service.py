@@ -50,6 +50,14 @@ def get_oauth_flow() -> Flow:
         },
         scopes=GOOGLE_SCOPES,
         redirect_uri=GOOGLE_REDIRECT_URI,
+        # PKCE cannot work here: the authorization URL and the callback are
+        # separate serverless invocations, each building its own Flow, so the
+        # code_verifier generated when the URL was built is gone by the time
+        # the code is exchanged and Google rejects it as invalid_grant. This is
+        # a confidential client (it holds a client secret) and the callback is
+        # CSRF-protected by the signed state, which is the standard web-server
+        # flow.
+        autogenerate_code_verifier=False,
     )
 
 
