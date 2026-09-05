@@ -38,6 +38,15 @@ class Secrets(BaseSettings):
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/google-callback"
 
     APPS_SCRIPT_URL: str = ""
+    # Shared secret sent to the Apps Script web app. The script must be deployed
+    # with "Who has access: Anyone" for the backend to reach it without Google
+    # credentials, so the URL alone is the only thing standing between a
+    # stranger and creating spreadsheets in - or repointing forms belonging to -
+    # the owner's Drive. This turns the URL into an authenticated endpoint.
+    APPS_SCRIPT_TOKEN: str = ""
+
+    # Swagger/ReDoc publish the whole admin API surface. Off unless asked for.
+    ENABLE_DOCS: bool = False
 
     USE_CREDENTIALS: bool = True
     VALIDATE_CERTS: bool = True

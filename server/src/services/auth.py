@@ -190,7 +190,15 @@ async def forgot_password_request_service(email: str, db: AsyncIOMotorDatabase):
 
         user = await get_user(email, db)
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            # Deliberately the same response as the success path. Returning 404
+            # "User not found" here let anyone enumerate every registered
+            # address before brute-forcing it - undoing the constant-time
+            # DUMMY_PASSWORD_HASH defence the login path goes to trouble for.
+            logger.info(
+                "Password reset requested for an unknown address; "
+                "returning the generic response"
+            )
+            return {"message": "OTP sent to your email"}
 
         # secrets.randbelow is CSPRNG-backed; random.randint is predictable and
         # must never generate a credential.
@@ -309,7 +317,9 @@ async def forgot_password_reset_service(
         token_doc = await db["forgot-password"].find_one(
             {"email": user["email"], "purpose": "password_reset"}
         )
-        if not token_doc or not token_doc["verified"]:
+        # .get, not ["verified"]: a record written by older code without the key
+        # raised KeyError and surfaced as an opaque 500.
+        if not token_doc or not token_doc.get("verified"):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP not verified")
 
         hashed_pw = security.hash_password(new_password)
@@ -317,6 +327,13 @@ async def forgot_password_reset_service(
         await db[collection].update_one(
             {"username": user["username"]}, {"$set": {"hashed_password": hashed_pw}}
         )
+
+        # Consume the record. It used to be left behind with verified=True, so
+        # the same reset token could be replayed for the rest of its 10-minute
+        # life, and the stale flag satisfied the check above for any later token
+        # issued for this address.
+        await db["forgot-password"].delete_many({"email": user["email"]})
+
         logger.info("Password reset completed for %s", email_or_username)
         return {"message": "Password reset successful"}
     except HTTPException:

@@ -11,7 +11,15 @@ from src.routes.profile import router as profile_router
 from src.routes.jobs import router as jobs_router
 
 
-app = FastAPI(title="Placement Portal API")
+# Swagger and ReDoc published the entire admin API surface - every route, field
+# name and schema - to anyone who opened the deployment. Off unless ENABLE_DOCS
+# is set, which keeps them available locally without exposing production.
+app = FastAPI(
+    title="Placement Portal API",
+    docs_url="/docs" if secrets.ENABLE_DOCS else None,
+    redoc_url="/redoc" if secrets.ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if secrets.ENABLE_DOCS else None,
+)
 
 # `allow_origins=["*"]` together with `allow_credentials=True` makes Starlette
 # reflect whatever Origin the caller sends, which is strictly worse than a
@@ -35,17 +43,23 @@ app.add_middleware(
 
 @app.get("/", tags=["default"])
 async def index():
-    return RedirectResponse(url="/docs")
+    if secrets.ENABLE_DOCS:
+        return RedirectResponse(url="/docs")
+    return {"status": "ok", "service": "Placement Portal API"}
 
 
 @app.get("/health", include_in_schema=False)
 async def health_check():
-    """Reports which optional integrations are actually configured."""
+    """
+    Reports which optional integrations are configured.
+
+    The configured CORS origins used to be echoed here; that is deployment
+    topology an anonymous caller has no need for.
+    """
     return {
         "status": "ok",
         "redis": secrets.redis_enabled,
         "mail": secrets.mail_enabled,
-        "cors_origins": allowed_origins,
     }
 
 

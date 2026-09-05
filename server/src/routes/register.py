@@ -13,6 +13,11 @@ from src.services.schemas import AdminCreate
 from src.redis import cache_delete  # import redis utils
 router = APIRouter(prefix="/register", tags=["Registration"])
 
+# A student row is ~100 bytes, so 5MB is roughly 50,000 students - far beyond
+# any real intake, while still bounding what a single request can allocate.
+MAX_CSV_BYTES = 5 * 1024 * 1024
+CSV_CHUNK_SIZE = 64 * 1024
+
 
 async def _authorize_admin_creation(
     db: AsyncIOMotorDatabase,
@@ -89,13 +94,35 @@ async def upload_student_csv(
             detail="Only admins can upload CSV files"
         )
 
-    if not csv_file.filename.endswith(".csv"):
+    if not (csv_file.filename or "").lower().endswith(".csv"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Please upload a valid CSV file"
         )
 
-    file_bytes = await csv_file.read()
+    # The whole file was read into memory with no ceiling, so a large upload
+    # could exhaust the function's memory before any parsing happened. Read in
+    # chunks and stop as soon as the limit is passed.
+    chunks = []
+    total = 0
+    while chunk := await csv_file.read(CSV_CHUNK_SIZE):
+        total += len(chunk)
+        if total > MAX_CSV_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=(
+                    f"CSV is larger than {MAX_CSV_BYTES // (1024 * 1024)}MB. "
+                    f"Split it and upload in batches."
+                ),
+            )
+        chunks.append(chunk)
+    file_bytes = b"".join(chunks)
+
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The uploaded CSV is empty",
+        )
     result = await process_student_csv(db=db, file_bytes=file_bytes, background_tasks=background_tasks)
     cache_delete("students:all")
     return result

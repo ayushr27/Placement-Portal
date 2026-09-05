@@ -280,9 +280,13 @@ def create_sheet_for_job(form_id: str, job_title: str) -> tuple[str, str | None]
     """
     try:
         payload = {"formId": form_id, "jobTitle": job_title}
-        logger.info(
-            "Creating sheet via %s with payload: %s", APPS_SCRIPT_URL, payload
-        )
+        # The URL is itself a credential - anyone holding it can create
+        # spreadsheets in, and repoint forms belonging to, the script owner's
+        # Drive - so it must not be written to the log on every job creation.
+        logger.info("Creating responses sheet for form %s", form_id)
+
+        if secrets.APPS_SCRIPT_TOKEN:
+            payload["token"] = secrets.APPS_SCRIPT_TOKEN
 
         response = requests.post(
             APPS_SCRIPT_URL,

@@ -1,11 +1,12 @@
 # src/routes/auth.py
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from src.rate_limit import client_identifier, enforce
 from src.routes.schemas import (
     TokenResponse,
     PasswordResetSchema,
@@ -23,9 +24,28 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 @router.post("/token", response_model=TokenResponse)
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
+    # Unlimited password guessing was possible here, and each attempt runs
+    # bcrypt, so it was also a CPU/cost amplifier. Limited per source address
+    # and per account, so neither rotating IPs nor targeting one victim works.
+    enforce(
+        "login-ip",
+        client_identifier(request),
+        limit=20,
+        window_seconds=300,
+        message="Too many login attempts. Please try again in a few minutes.",
+    )
+    enforce(
+        "login-user",
+        (form_data.username or "").strip().casefold(),
+        limit=10,
+        window_seconds=300,
+        message="Too many login attempts for this account. Try again shortly.",
+    )
+
     try:
         return await auth_service.login_user(
             form_data.username, form_data.password, db
@@ -61,13 +81,19 @@ async def reset_password(
             db=db,
         )
     except PermissionError as e:
-        logger.warning(f"Permission denied for {current_user}: {e}")
+        logger.warning(
+            "Permission denied for %s: %s", current_user.get("username"), e
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e),
         )
     except ValueError as e:
-        logger.warning(f"Invalid password reset attempt for {current_user}: {e}")
+        logger.warning(
+            "Invalid password reset attempt for %s: %s",
+            current_user.get("username"),
+            e,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
@@ -84,10 +110,28 @@ async def reset_password(
 
 @router.post("/forgot-password/request")
 async def forgot_password_request(
+    request: Request,
     payload: ForgotPasswordRequestSchema,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     email = payload.email
+    # Each call sends a real email AND replaces the stored OTP with a fresh
+    # attempts=0 record, so without a cap here the 5-attempt limit on /verify
+    # could be reset indefinitely while mail-bombing the victim.
+    enforce(
+        "otp-request-ip",
+        client_identifier(request),
+        limit=10,
+        window_seconds=3600,
+        message="Too many reset requests. Please try again later.",
+    )
+    enforce(
+        "otp-request-email",
+        str(email).strip().casefold(),
+        limit=3,
+        window_seconds=3600,
+        message="Too many reset requests for this account. Try again later.",
+    )
     try:
         return await auth_service.forgot_password_request_service(email, db)
     except ValueError as e:
@@ -108,10 +152,20 @@ async def forgot_password_request(
 
 @router.post("/forgot-password/verify")
 async def forgot_password_verify(
+    request: Request,
     payload: ForgotPasswordVerifySchema,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     email = payload.email
+    # Backstop for the per-OTP attempt counter, which only covers the current
+    # OTP record and is cleared whenever a new code is requested.
+    enforce(
+        "otp-verify",
+        str(email).strip().casefold(),
+        limit=15,
+        window_seconds=3600,
+        message="Too many verification attempts. Please request a new code.",
+    )
     try:
         return await auth_service.forgot_password_verify_service(
             email, payload.otp, db
@@ -134,9 +188,16 @@ async def forgot_password_verify(
 
 @router.post("/forgot-password/reset")
 async def forgot_password_reset(
+    request: Request,
     payload: ForgotPasswordResetSchema,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
+    enforce(
+        "password-reset",
+        client_identifier(request),
+        limit=15,
+        window_seconds=3600,
+    )
     try:
         return await auth_service.forgot_password_reset_service(
             payload.new_password, payload.token, db

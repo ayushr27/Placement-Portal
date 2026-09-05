@@ -1,38 +1,65 @@
 import csv
 import io
-import random
+import secrets as token_secrets
 import string
-import asyncio
 from fastapi import HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from fastapi import HTTPException
 from src.services.schemas import StudentCreate, StudentInDB
 from src.routes.utils import security
 from fastapi import BackgroundTasks
 from src.services.utils import queue_email_task
-from src.services.constants import ACCOUNT_CREATION_EMAIL_BODY, BATCH_SIZE, BATCH_DELAY_SECONDS
+from src.services.constants import ACCOUNT_CREATION_EMAIL_BODY
 from src import logger
 
 
-def generate_random_password(length: int = 8) -> str:
+def generate_random_password(length: int = 16) -> str:
     """
     Generate a random alphanumeric password.
 
+    Uses `secrets`, not `random`. `random.choices` is Mersenne Twister: not
+    cryptographically secure, and a whole CSV batch was generated from one
+    stream in a single loop, so seeing one issued password gave real leverage
+    over a classmate's. `secrets.randbelow` is already used correctly for OTPs
+    elsewhere in this codebase.
+
     Args:
-        length (int): Length of the password. Defaults to 8.
+        length (int): Length of the password. Defaults to 16.
 
     Returns:
         str: Randomly generated password.
     """
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(token_secrets.choice(alphabet) for _ in range(length))
 
 
 async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes, background_tasks: BackgroundTasks | None = None) -> dict:
-    csv_text = file_bytes.decode("utf-8")
+    # A spreadsheet exported from Excel is usually cp1252, not UTF-8, so any
+    # accented name raised an uncaught UnicodeDecodeError and the admin saw an
+    # opaque 500. Fall back rather than fail, and only give up if both fail.
+    try:
+        csv_text = file_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            csv_text = file_bytes.decode("cp1252")
+        except UnicodeDecodeError:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Could not read the CSV's text encoding. Re-save it as "
+                    "CSV UTF-8 and try again."
+                ),
+            )
+
     reader = csv.DictReader(io.StringIO(csv_text))
 
     required = {"name", "email", "roll_number"}  # batch, branch, course optional now
     to_insert, creds_to_send = [], []
+    # The duplicate check below only looks at what is already in the database,
+    # so two rows sharing an email within one file both got inserted - two
+    # documents with the same username, one of which is unreachable at login
+    # because get_user returns whichever Mongo hands back first, while both
+    # students were emailed a password.
+    seen_emails = set()
 
     for row in reader:
         if not required.issubset(row.keys()):
@@ -52,6 +79,15 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes, backg
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid data for {row.get('email', '')}: {str(e)}")
+
+        email_key = student_create.email.strip().casefold()
+        if email_key in seen_emails:
+            logger.warning(
+                "Skipping duplicate email within the uploaded CSV: %s",
+                student_create.email,
+            )
+            continue
+        seen_emails.add(email_key)
 
         if await db.students.find_one({"email": student_create.email}):
             continue
@@ -83,30 +119,32 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes, backg
         await db.students.insert_many(to_insert)
         logger.info(f"Inserted {len(to_insert)} credentials to database")
 
-        # Send mails in batches
-        for i in range(0, len(creds_to_send), BATCH_SIZE):
-            batch = creds_to_send[i:i + BATCH_SIZE]
-            for cred in batch:
-                subject = "Your Student Account Credentials"
-                body = ACCOUNT_CREATION_EMAIL_BODY.format(
-                    name=cred["name"],
-                    username=cred["username"],
-                    password=cred["password"],
-                )
-                # Keyword args: the positional order here was wrong
-                # (background_tasks landed in `email` and `body` in
-                # `background_tasks`), so every CSV upload raised
-                # AttributeError: 'str' object has no attribute 'add_task'.
-                if queue_email_task(
-                    email=cred["email"],
-                    subject=subject,
-                    body=body,
-                    background_tasks=background_tasks,
-                ):
-                    emailed += 1
-
-            if i + BATCH_SIZE < len(creds_to_send):
-                await asyncio.sleep(BATCH_DELAY_SECONDS)
+        # Queue the mails. There used to be an `await asyncio.sleep(
+        # BATCH_DELAY_SECONDS)` between batches, which throttled *queueing*
+        # rather than sending - queue_email_task only calls
+        # background_tasks.add_task, which returns immediately. The sleep
+        # therefore bought nothing and held the HTTP request open for ~10s per
+        # 10 students: a 300-student upload ran ~290s, far past the platform's
+        # function limit, so the admin got a gateway timeout and lost the
+        # response body carrying the generated passwords.
+        for cred in creds_to_send:
+            subject = "Your Student Account Credentials"
+            body = ACCOUNT_CREATION_EMAIL_BODY.format(
+                name=cred["name"],
+                username=cred["username"],
+                password=cred["password"],
+            )
+            # Keyword args: the positional order here was wrong
+            # (background_tasks landed in `email` and `body` in
+            # `background_tasks`), so every CSV upload raised
+            # AttributeError: 'str' object has no attribute 'add_task'.
+            if queue_email_task(
+                email=cred["email"],
+                subject=subject,
+                body=body,
+                background_tasks=background_tasks,
+            ):
+                emailed += 1
 
     if not to_insert:
         message = "No new students added"

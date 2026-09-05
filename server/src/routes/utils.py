@@ -97,9 +97,10 @@ class Security:
             hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
             return hashed.decode("utf-8")
         except Exception as e:
+            logger.error("Password hashing error: %s", e)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Password hashing error: {str(e)}"
+                detail="Could not process the password",
             )
 
     def verify_password(
@@ -129,9 +130,10 @@ class Security:
             to_encode.update({"exp": expire})
             return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
         except Exception as e:
+            logger.error("Token creation error: %s", e)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Token creation error: {str(e)}"
+                detail="Could not issue a token",
             )
 
     def decode_token(self, token: str) -> Dict[str, Any]:
@@ -162,10 +164,16 @@ class Security:
             if not self.verify_password(credentials.password, user["hashed_password"]):
                 return None
             return user
+        except HTTPException:
+            # Without this the 401/500 raised above (and by get_user) was caught
+            # below and rewritten as a 500 whose detail echoed the original
+            # exception text back to an unauthenticated caller.
+            raise
         except Exception as e:
+            logger.error("Authentication error: %s", e)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Authentication error: {str(e)}"
+                detail="Authentication failed",
             )
 
     async def get_current_user(
@@ -181,6 +189,18 @@ class Security:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Single-purpose tokens must not authenticate ordinary requests. The
+        # token handed out after OTP verification carries `sub` and `role` -
+        # exactly what this function needs - plus action="reset_password", which
+        # nothing checked. It was therefore a fully valid bearer token for every
+        # authenticated endpoint for its 10-minute lifetime.
+        if payload.get("action"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="This token cannot be used to authenticate requests",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 

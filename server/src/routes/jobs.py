@@ -51,7 +51,10 @@ async def create_job(
     current_user: dict = Depends(security.get_current_user),
 ):
     if current_user.get("role") != "admin":
-        logger.warning(f"Unauthorized job creation attempt by {current_user}")
+        logger.warning(
+            "Unauthorized job creation attempt by %s",
+            current_user.get("username"),
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can create jobs",
@@ -271,7 +274,10 @@ async def get_job_metrics(
     current_user: dict = Depends(security.get_current_user),
 ):
     if current_user.get("role") != "admin":
-        logger.warning(f"Unauthorized metrics view attempt by {current_user}")
+        logger.warning(
+            "Unauthorized metrics view attempt by %s",
+            current_user.get("username"),
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can view job metrics",
@@ -302,7 +308,10 @@ async def update_all_metrics(
     current_user: dict = Depends(security.get_current_user),
 ):
     if current_user.get("role") != "admin":
-        logger.warning(f"Unauthorized metrics update attempt by {current_user}")
+        logger.warning(
+            "Unauthorized metrics update attempt by %s",
+            current_user.get("username"),
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can update metrics",
@@ -341,7 +350,10 @@ async def update_job(
     current_user: dict = Depends(security.get_current_user),
 ):
     if current_user.get("role") != "admin":
-        logger.warning(f"Unauthorized job update attempt by {current_user}")
+        logger.warning(
+            "Unauthorized job update attempt by %s",
+            current_user.get("username"),
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can update jobs",

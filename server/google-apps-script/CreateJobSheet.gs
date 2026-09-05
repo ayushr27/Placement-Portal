@@ -17,14 +17,18 @@
  *
  * -- Deploy ---------------------------------------------------------------
  *  1. script.google.com -> New project, paste this file, save.
- *  2. Deploy -> New deployment -> type "Web app".
- *  3. Execute as: Me.  Who has access: Anyone.
- *  4. Authorize when prompted (it needs Forms + Sheets + Drive access).
- *  5. Copy the /exec URL -> that is APPS_SCRIPT_URL.
+ *  2. Project Settings -> Script Properties -> add APPS_SCRIPT_TOKEN with a
+ *     random value (openssl rand -hex 32), and set the same value as the
+ *     backend's APPS_SCRIPT_TOKEN environment variable.
+ *  3. Deploy -> New deployment -> type "Web app".
+ *  4. Execute as: Me.  Who has access: Anyone.
+ *  5. Authorize when prompted (it needs Forms + Sheets + Drive access).
+ *  6. Copy the /exec URL -> that is APPS_SCRIPT_URL.
  *
  * "Anyone" is required because the backend calls it server-to-server with no
- * Google credentials. The URL is unguessable, but treat it as a secret: anyone
- * holding it can create spreadsheets in this account.
+ * Google credentials, so the token in step 2 is what actually authenticates the
+ * caller. Without it, anyone holding the URL can create spreadsheets in this
+ * account and repoint any form it can open. Still treat the URL as a secret.
  */
 
 function doPost(e) {
@@ -34,6 +38,21 @@ function doPost(e) {
     }
 
     var body = JSON.parse(e.postData.contents);
+
+    // The deployment must be reachable by "Anyone" for the backend to call it
+    // without Google credentials, so without this check the URL alone is the
+    // only protection - and anyone who obtained it could create unlimited
+    // spreadsheets here, or call setDestination on any form this account can
+    // open and divert a live recruitment form's responses to a sheet of their
+    // choosing. Set APPS_SCRIPT_TOKEN in Script Properties to the same value as
+    // the backend's APPS_SCRIPT_TOKEN environment variable.
+    var expectedToken = PropertiesService
+      .getScriptProperties()
+      .getProperty('APPS_SCRIPT_TOKEN');
+    if (expectedToken && !constantTimeEquals(String(body.token || ''), expectedToken)) {
+      return json({ error: 'Unauthorized' });
+    }
+
     var formId = body.formId;
     var jobTitle = body.jobTitle || 'Job';
 
@@ -60,6 +79,21 @@ function doPost(e) {
 /** Health check: opening the /exec URL in a browser should show this. */
 function doGet() {
   return json({ status: 'ok', expects: 'POST {formId, jobTitle}' });
+}
+
+/**
+ * Compare two strings without leaking their common prefix length via timing.
+ * Apps Script has no crypto.timingSafeEqual, so this is done by hand.
+ */
+function constantTimeEquals(a, b) {
+  if (a.length !== b.length) {
+    return false;
+  }
+  var diff = 0;
+  for (var i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
 }
 
 function json(obj) {
