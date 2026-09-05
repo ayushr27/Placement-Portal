@@ -72,18 +72,29 @@ def queue_email_task(
     subject: str,
     body: str,
     background_tasks: BackgroundTasks | None = None,
-) -> None:
+) -> bool:
     """
     Queue an email sending task using FastAPI's background worker.
 
     Args:
-        background_tasks (BackgroundTasks): FastAPI background task handler.
         email (str): Recipient email.
         subject (str): Email subject.
         body (str): Email content.
+        background_tasks (BackgroundTasks): FastAPI background task handler.
+
+    Returns:
+        bool: True if the send was queued, False if it was skipped.
     """
-    if background_tasks:
-        background_tasks.add_task(send_email_to_student, email, subject, body)
+    if not secrets.mail_enabled:
+        # Queueing here would fail inside the background task, after the
+        # response has already been sent, so the caller would never learn the
+        # mail never went out. Report it instead.
+        logger.warning("Mail is not configured; skipping email to %s", email)
+        return False
+    if not background_tasks:
+        return False
+    background_tasks.add_task(send_email_to_student, email, subject, body)
+    return True
 
 
 async def send_email(to_email: str, subject: str, body: str) -> None:

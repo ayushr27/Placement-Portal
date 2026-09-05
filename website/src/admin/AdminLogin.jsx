@@ -5,12 +5,14 @@ import "../css/student_login.css";
 import { API_URL } from "../../env-config";
 import toast, { Toaster } from "react-hot-toast";
 import MotionPath from "../components/transition";
+import ForgotPassword from "../components/ForgotPassword";
 
 export default function AdminLogin() {
   const [Password, setPassword] = useState("");
   const [Username, setUsername] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -65,6 +67,8 @@ export default function AdminLogin() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen overflow-hidden relative font-[Figtree]">
+
+      <ForgotPassword open={showForgot} onClose={() => setShowForgot(false)} />
       {/* --- Fullscreen Loader --- */}
  {loading && (
   <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-md overflow-hidden">
@@ -144,9 +148,13 @@ export default function AdminLogin() {
             </button>
           </div>
 
-          <p className="text-sm text-gray-500 cursor-pointer text-right">
+          <button
+            type="button"
+            onClick={() => setShowForgot(true)}
+            className="text-sm text-gray-500 hover:text-black cursor-pointer text-right"
+          >
             Forgot Password?
-          </p>
+          </button>
 
           {/* Login Button */}
           <button

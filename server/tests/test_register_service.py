@@ -59,6 +59,7 @@ async def test_existing_student_skipped(monkeypatch):
     assert result == {
         "inserted_count": 0,
         "inserted_emails": [],
+        "emailed_count": 0,
         "message": "No new students added"
     }
 
@@ -74,8 +75,13 @@ async def test_new_student_insert_and_email(monkeypatch):
     file_bytes = csv_content.encode("utf-8")
 
     sent_emails = []
-    def fake_send_email(background_task, to, subject, body):
-        sent_emails.append((to, subject, body))
+
+    # Signature must match src.services.utils.queue_email_task exactly. The
+    # previous stub was (background_task, to, subject, body), which mirrored a
+    # wrong call in register.py and so hid the real AttributeError.
+    def fake_send_email(email, subject, body, background_tasks=None):
+        sent_emails.append((email, subject, body))
+        return True
 
     monkeypatch.setattr("src.services.register.queue_email_task", fake_send_email)
 
@@ -84,4 +90,8 @@ async def test_new_student_insert_and_email(monkeypatch):
     assert result["inserted_count"] == 1
     assert "john@example.com" in result["inserted_emails"]
     assert len(sent_emails) == 1
+    assert sent_emails[0][0] == "john@example.com"
     assert "John Doe" in sent_emails[0][2]
+    assert result["emailed_count"] == 1
+    # Credentials are only returned when mail could not deliver them.
+    assert "credentials" not in result

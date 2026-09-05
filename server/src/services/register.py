@@ -78,6 +78,7 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes, backg
             "password": student_create.password,
         })
 
+    emailed = 0
     if to_insert:
         await db.students.insert_many(to_insert)
         logger.info(f"Inserted {len(to_insert)} credentials to database")
@@ -92,16 +93,49 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes, backg
                     username=cred["username"],
                     password=cred["password"],
                 )
-                queue_email_task(background_tasks, cred["email"], subject, body)
+                # Keyword args: the positional order here was wrong
+                # (background_tasks landed in `email` and `body` in
+                # `background_tasks`), so every CSV upload raised
+                # AttributeError: 'str' object has no attribute 'add_task'.
+                if queue_email_task(
+                    email=cred["email"],
+                    subject=subject,
+                    body=body,
+                    background_tasks=background_tasks,
+                ):
+                    emailed += 1
 
             if i + BATCH_SIZE < len(creds_to_send):
                 await asyncio.sleep(BATCH_DELAY_SECONDS)
 
-    return {
+    if not to_insert:
+        message = "No new students added"
+    elif emailed == len(creds_to_send):
+        message = "Students added and credentials emailed"
+    else:
+        message = (
+            "Students added, but credentials could NOT be emailed because mail "
+            "is not configured. The generated passwords are returned below and "
+            "are not recoverable later - distribute them now."
+        )
+
+    result = {
         "inserted_count": len(to_insert),
         "inserted_emails": [c["email"] for c in creds_to_send],
-        "message": "Students added and credentials emailed" if to_insert else "No new students added",
+        "emailed_count": emailed,
+        "message": message,
     }
+
+    # Passwords are random and stored only as bcrypt hashes. If they could not
+    # be delivered by mail, handing them back to the admin who uploaded the CSV
+    # is the only way the accounts are usable at all.
+    if to_insert and emailed < len(creds_to_send):
+        result["credentials"] = [
+            {"username": c["username"], "password": c["password"]}
+            for c in creds_to_send
+        ]
+
+    return result
 
 
 async def create_admin(db: AsyncIOMotorDatabase, admin_data: dict) -> dict:
