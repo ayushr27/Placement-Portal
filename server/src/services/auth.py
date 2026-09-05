@@ -3,6 +3,7 @@ import secrets as token_secrets
 from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from fastapi import HTTPException, status
+from src.config import secrets as app_secrets
 from src.routes.utils import get_user, security
 from src.services.utils import send_email
 from src.services import google_service
@@ -175,6 +176,18 @@ async def forgot_password_request_service(email: str, db: AsyncIOMotorDatabase):
         HTTPException: If user not found.
     """
     try:
+        # The OTP can only reach the user by email, so without SMTP this flow
+        # cannot work. Say so plainly instead of failing as an opaque 500.
+        if not app_secrets.mail_enabled:
+            logger.warning("Password reset requested but mail is not configured")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Password reset is unavailable because email is not "
+                    "configured on the server. Please contact the placement cell."
+                ),
+            )
+
         user = await get_user(email, db)
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
