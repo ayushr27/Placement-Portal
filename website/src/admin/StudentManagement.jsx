@@ -35,7 +35,11 @@ const StudentManagement = () => {
       );
 
       if (response.status === 404) {
-        toast.info("Student not found.");
+        // react-hot-toast has no `toast.info` - only success/error/loading/custom
+        // and the callable default. Calling it threw a TypeError inside this try
+        // block, which the catch below then reported as "Network error", so a
+        // simple "no such student" looked like the API was unreachable.
+        toast("Student not found.");
         setSelectedStudent(null);
       } else if (response.status >= 200 && response.status < 300) {
         setSelectedStudent(response.data);
@@ -88,6 +92,11 @@ const StudentManagement = () => {
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 w-full"
                 />
                 <button
+                  // Without type="button" a <button> inside a <form> defaults
+                  // to submit, and with no onSubmit handler the browser did a
+                  // native GET submit - reloading the page and discarding the
+                  // in-flight request, so Search appeared to do nothing.
+                  type="button"
                   onClick={handleSearchStudent}
                   disabled={isSearching}
                   className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap"

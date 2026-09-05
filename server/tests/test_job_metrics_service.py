@@ -1,4 +1,5 @@
 import pytest
+from fastapi import HTTPException
 from datetime import datetime, timedelta, timezone
 from src.services.job_metrics import calculate_metrics, update_or_create_job_metrics, update_all_jobs_metrics
 
@@ -140,3 +141,37 @@ async def test_update_all_jobs_metrics(monkeypatch):
 
     assert updated == ["1", "2"]
 
+
+
+@pytest.mark.asyncio
+async def test_one_job_without_a_sheet_does_not_fail_the_whole_batch(monkeypatch):
+    """
+    Regression for the reported "can't check the metrics" error.
+
+    calculate_metrics raises HTTPException(400) for a job with no responses
+    sheet. update_all_jobs_metrics caught that with a broad `except Exception`
+    and re-raised it as a 500 for the entire batch, so a single job posted
+    without a form link made the metrics refresh fail for every other job -
+    permanently, since the bad job stays in the collection.
+    """
+    no_sheet = FakeJob(_id="no-sheet", responses_sheet_link=None)
+    good = FakeJob(
+        _id="has-sheet",
+        responses_sheet_link="link",
+        deadline=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    db = FakeDB([no_sheet, good])
+
+    async def fake_calculate_metrics(_db, job_id, *_args, **_kwargs):
+        if job_id == "no-sheet":
+            raise HTTPException(status_code=400, detail="Job has no response sheet link")
+        return {"gender_wise": {}, "branch_wise": {}}
+
+    monkeypatch.setattr(
+        "src.services.job_metrics.calculate_metrics", fake_calculate_metrics
+    )
+
+    updated = await update_all_jobs_metrics(db, {})
+
+    # The healthy job still gets metrics; the broken one is skipped, not fatal.
+    assert updated == ["has-sheet"]

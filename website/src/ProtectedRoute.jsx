@@ -32,7 +32,12 @@ const isExpired = (token) => {
 
 const ProtectedRoute = ({ children, allowedRole }) => {
   const token = localStorage.getItem("token");
-  const role = localStorage.getItem("role");
+  // Read the role from the token, not from localStorage. The login pages wrote
+  // `role` there themselves, so a user could set localStorage.role = "admin"
+  // and mount the entire admin UI. The server is what actually enforces this,
+  // but the token claim is a truthful source that costs nothing to use, and
+  // the decode already happens below for `exp`.
+  const role = readTokenPayload(token || "")?.role;
 
   const loginPath = allowedRole === "admin" ? "/admin/login" : "/student/login";
 

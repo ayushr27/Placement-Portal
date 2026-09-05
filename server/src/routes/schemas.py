@@ -240,6 +240,12 @@ class JobResponse(BaseModel):
     created_by: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    # Set when the job saved but the Google Sheets side did not, e.g. the admin
+    # pasted a share link rather than an edit link, or the form belongs to
+    # another Google account. This used to be computed and only written to the
+    # log, so the admin was told the posting succeeded and never learned that
+    # no responses sheet exists.
+    sheet_warning: Optional[str] = None
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -248,20 +254,29 @@ class JobResponse(BaseModel):
     )
 
 
+# `_id: str` looks like a field but Pydantic v2 treats a leading underscore as a
+# private attribute, so it was silently dropped: routes/jobs.py assigned
+# sheet["_id"] for nothing and GET /api/jobs/master-sheets returned no
+# identifier at all, leaving the client unable to address a sheet it had just
+# listed. Every other model here already uses the alias form.
 class MasterSheetInDB(BaseModel):
-    _id: str
+    id: Optional[str] = Field(default=None, alias="_id")
     admin_id: Optional[str] = None
     batch_year: Optional[List[int]] = None
     spreadsheet_id: Optional[str] = None
     created_at: Optional[datetime] = None
 
+    model_config = ConfigDict(populate_by_name=True)
+
 
 class MasterSheetResponse(BaseModel):
-    _id: str
+    id: Optional[str] = Field(default=None, alias="_id")
     admin_id: Optional[str] = None
     batch_year: Optional[List[int]] = None
     spreadsheet_id: Optional[str] = None
     created_at: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class AdminEditStudentProfile(BaseModel):

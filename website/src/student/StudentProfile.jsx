@@ -43,37 +43,45 @@ export default function Profile() {
     try {
       setLoading(true);
 
-      // Check if data exists in localStorage
+      // Paint immediately from the cached copy, then always refresh from the
+      // API. Previously the fetch ran ONLY when localStorage had no "user",
+      // and that key is written once at login - so an admin correcting a
+      // student's CGPA, branch or documents was invisible to that student
+      // until they logged out, and the stale CGPA also fed the eligibility
+      // check on the jobs page.
       const storedProfile = localStorage.getItem("user");
-
       if (storedProfile) {
-        // Parse and set local profile
-        const parsedProfile = JSON.parse(storedProfile);
-        setProfile(parsedProfile);
-        setFormData(parsedProfile);
-      } else {
-        // If not found, fetch from database
-        const token = localStorage.getItem("token");
-        if (token) {
-          const response = await fetch(`${API_URL}/profile/student/me`, {
-            method: "GET",
-            headers: {
-              "Authorization": `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          });
-
-          if (response.ok) {
-            const freshProfile = await response.json();
-            setProfile(freshProfile);
-            setFormData(freshProfile);
-            localStorage.setItem("user", JSON.stringify(freshProfile));
-          } else {
-            console.error("Failed to fetch profile from database");
-          }
-        } else {
-          console.warn("No token found — cannot fetch profile");
+        try {
+          const parsedProfile = JSON.parse(storedProfile);
+          setProfile(parsedProfile);
+          setFormData(parsedProfile);
+        } catch {
+          // A corrupt value used to throw here and leave the page stuck on
+          // "No profile data available" with no retry.
+          localStorage.removeItem("user");
         }
+      }
+
+      const token = localStorage.getItem("token");
+      if (token) {
+        const response = await fetch(`${API_URL}/profile/student/me`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (response.ok) {
+          const freshProfile = await response.json();
+          setProfile(freshProfile);
+          setFormData(freshProfile);
+          localStorage.setItem("user", JSON.stringify(freshProfile));
+        } else {
+          console.error("Failed to fetch profile from database");
+        }
+      } else {
+        console.warn("No token found — cannot fetch profile");
       }
     } catch (error) {
       console.error("Error fetching or parsing profile:", error);
@@ -420,7 +428,7 @@ export default function Profile() {
                       <a
                         href={profile.linkedin_link}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                     className="flex items-center gap-3 p-3 bg-white rounded-lg hover:bg-[#0077b5] hover:text-white transition-all group shadow-sm"
                   >
                     <Linkedin size={20} className="flex-shrink-0" />

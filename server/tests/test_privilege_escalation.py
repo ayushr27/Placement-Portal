@@ -194,3 +194,34 @@ def test_stored_role_cannot_grant_admin():
     )
 
     assert user["role"] == "student"
+
+
+# --- 4. endpoints that used to be reachable without a token ----------------
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        # Was fully unauthenticated: anyone could mutate jobs and drive Google
+        # API calls on the admin's OAuth credentials.
+        ("POST", "/api/jobs/sync-expired"),
+        # Was public: leaked every Google spreadsheet_id and admin_id.
+        ("GET", "/api/jobs/master-sheets"),
+        # Was public: leaked the admin's email and the internal sheet links.
+        ("GET", "/api/jobs/get-jobs"),
+    ],
+)
+def test_endpoint_requires_authentication(method, path):
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as anon:
+        assert anon.request(method, path).status_code == 401, path
+
+
+def test_api_docs_are_not_published_by_default():
+    """Swagger exposed the whole admin API surface to anonymous callers."""
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as anon:
+        for path in ("/docs", "/redoc", "/openapi.json"):
+            assert anon.get(path).status_code == 404, path

@@ -1,5 +1,23 @@
 # Cloudinary Integration Setup
 
+> **Security warning — read before enabling uploads for real students.**
+>
+> An unsigned preset means the cloud name and preset are baked into the public
+> JavaScript bundle, so anyone can upload arbitrary files into this Cloudinary
+> account, and every uploaded file is served from a public CDN URL with no
+> access control.
+>
+> This portal uploads **Aadhaar cards, PAN cards and resumes** through this
+> path. Do not point it at a real Cloudinary account holding real students'
+> documents while the preset is unsigned. The correct fix is a signed,
+> server-side upload (the backend issues a signature, files are stored with
+> `access_mode: authenticated`, and admins receive short-lived signed URLs).
+>
+> Uploads currently fail closed: `env-config.js` has no fallback cloud name, so
+> nothing is uploaded until these variables are set deliberately.
+
+
+
 This application uses Cloudinary to upload and manage images from file uploads.
 
 ## Setup Instructions
@@ -13,7 +31,7 @@ This application uses Cloudinary to upload and manage images from file uploads.
 ### 2. Get Your Credentials
 
 From your Cloudinary dashboard:
-- **Cloud Name**: Found in the "Account Details" section (e.g., `dgsbvayag`)
+- **Cloud Name**: Found in the "Account Details" section (e.g., `your-cloud-name`)
 
 ### 3. Create an Upload Preset
 
@@ -34,7 +52,7 @@ Create a `.env` file in the `website` directory with the following:
 VITE_SERVER=http://localhost:8000
 
 # Cloudinary Configuration
-VITE_CLOUDINARY_CLOUD_NAME=dgsbvayag
+VITE_CLOUDINARY_CLOUD_NAME=your-cloud-name
 VITE_CLOUDINARY_UPLOAD_PRESET=student-profiles
 ```
 

@@ -6,7 +6,10 @@ COPY . .
 RUN npm run build
 
 FROM nginx:alpine
-WORKDIR /usr/share/ngnix/html
+# Was /usr/share/ngnix/html - a typo. nginx.conf serves /usr/share/nginx/html
+# and entrypoint.sh writes env-config.js there, so the build output was copied
+# somewhere nginx never reads and the container served the default page.
+WORKDIR /usr/share/nginx/html
 COPY --from=build /app/dist .
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 

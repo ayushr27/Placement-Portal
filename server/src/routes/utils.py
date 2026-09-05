@@ -108,10 +108,12 @@ class Security:
         plain_password: str,
         hashed_password: str
     ) -> bool:
-        plain_password = plain_password.strip()
         try:
+            # .strip() was outside the try, so a None password - reachable via
+            # PasswordResetSchema.old_password, which is Optional - raised
+            # AttributeError here and surfaced as a 500 instead of a 400.
             return bcrypt.checkpw(
-                plain_password.encode("utf-8"),
+                plain_password.strip().encode("utf-8"),
                 hashed_password.encode("utf-8")
             )
         except Exception:

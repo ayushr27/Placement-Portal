@@ -1,4 +1,15 @@
+import os
+
 from locust import HttpUser, task, between
+
+# Credentials come from the environment. They used to be hardcoded here - a real
+# institutional address with an 8-character password matching this codebase's
+# generated format, plus admin/admin - committed since the initial commit and
+# therefore public in every clone of this repository.
+STUDENT_USERNAME = os.environ.get("LOCUST_STUDENT_USERNAME", "")
+STUDENT_PASSWORD = os.environ.get("LOCUST_STUDENT_PASSWORD", "")
+ADMIN_USERNAME = os.environ.get("LOCUST_ADMIN_USERNAME", "")
+ADMIN_PASSWORD = os.environ.get("LOCUST_ADMIN_PASSWORD", "")
 
 
 class StudentUser(HttpUser):
@@ -11,8 +22,8 @@ class StudentUser(HttpUser):
 
     def on_start(self):
         """Login as a student before running any tasks."""
-        self.username = "523cs0009@iiitk.ac.in"
-        self.password = "XBz2biTr"
+        self.username = STUDENT_USERNAME
+        self.password = STUDENT_PASSWORD
         self.headers = {"Authorization": ""}
 
         with self.client.post(
@@ -49,8 +60,8 @@ class AdminUser(HttpUser):
 
     def on_start(self):
         """Login as an admin before running any tasks."""
-        self.username = "admin"
-        self.password = "admin"
+        self.username = ADMIN_USERNAME
+        self.password = ADMIN_PASSWORD
         self.headers = {"Authorization": ""}
 
         with self.client.post(

@@ -1,5 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.concurrency import run_in_threadpool
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, ValidationError
 
@@ -80,7 +81,12 @@ async def create_job(
 
             if form_id:
                 try:
-                    sheet_link, published_url = jobs_service.create_sheet_for_job(
+                    # create_sheet_for_job makes a synchronous HTTPS call to the
+                    # Apps Script web app. Called directly it blocked the event
+                    # loop for the whole round trip, stalling every other
+                    # request served by this instance.
+                    sheet_link, published_url = await run_in_threadpool(
+                        jobs_service.create_sheet_for_job,
                         form_id=form_id,
                         job_title=payload.job_designation,
                     )
@@ -108,9 +114,10 @@ async def create_job(
         if result:
             cache_delete("jobs:all")
             if sheet_warning:
-                # Surfaced so the admin knows the posting succeeded but the
-                # Google Sheets side did not.
+                # Returned, not just logged: the admin needs to know the posting
+                # succeeded while the responses sheet did not get created.
                 logger.info("Job posted with warning: %s", sheet_warning)
+                result.sheet_warning = sheet_warning
             return result
 
         logger.error("Failed to create job (DB returned None)")

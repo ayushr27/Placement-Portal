@@ -144,40 +144,64 @@ const StudentUpdates = ({ student, onClose, onStudentFound }) => {
     setIsLoading(true);
 
     try {
-      if (formData._id) {
-        // Construct the payload to match the schema, ensuring all fields are sent
-        const payload = {
-            ...formData,
-            ...uploadedFields,
-            // The API schema shows date_of_birth as Z-formatted date string,
-            // but for a PUT request with a date input, the collected date string is often sufficient.
-            date_of_birth: formData.date_of_birth,
-        };
-
-        // WARNING: axios is an external dependency. This code relies on the runtime environment having it.
-        await axios.put(
-          `${SERVER_URI}/profile/admin/student_update/${formData.roll_number}`,
-          payload,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        // WARNING: toast is an external dependency. This code relies on the runtime environment having it.
-        toast.success("Student updated successfully!");
+      if (!formData.roll_number) {
+        toast.error("A roll number is required to save a student.");
+        return;
       }
+
+      // Identity and privilege fields are rejected by the server
+      // (StudentEditProfile sets extra="forbid"), because they must not be
+      // settable from a profile payload - `role` in particular was how a
+      // student could make themselves an admin. The roll number stays in the
+      // URL, which is what identifies the record.
+      const SERVER_REJECTED_FIELDS = [
+        "role",
+        "username",
+        "email",
+        "roll_number",
+        "_id",
+        "id",
+        "hashed_password",
+        "has_edited_profile",
+      ];
+      const merged = { ...formData, ...uploadedFields };
+      const payload = Object.fromEntries(
+        Object.entries(merged).filter(
+          ([key, value]) =>
+            !SERVER_REJECTED_FIELDS.includes(key) &&
+            value !== "" &&
+            value !== null &&
+            value !== undefined
+        )
+      );
+
+      await axios.put(
+        `${SERVER_URI}/profile/admin/student_update/${formData.roll_number}`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      toast.success("Student updated successfully!");
       onStudentFound(); // Call parent function to refresh data
       onClose(); // Close the modal/form
     } catch (error) {
       console.error("Error:", error);
-      // WARNING: toast is an external dependency.
-      // toast.error(
-      //   error.response?.data?.message ||
-      //   "Failed to save student profile. Please try again."
-      // );
+      // This was commented out, so a 403/422/500 produced a console line and
+      // nothing else - the modal just stayed open with no explanation. The
+      // request was also nested inside `if (formData._id)`, so pressing
+      // "Create" for a student with no _id sent nothing at all and still closed
+      // the modal as though it had worked.
+      const detail = error.response?.data?.detail;
+      toast.error(
+        (typeof detail === "string" ? detail : null) ||
+          error.response?.data?.message ||
+          "Failed to save student profile. Please try again."
+      );
     } finally {
       setIsLoading(false);
     }

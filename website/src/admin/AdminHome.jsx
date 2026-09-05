@@ -15,8 +15,10 @@ const AdminHome = () => {
   const [formData, setFormData] = useState({});
 
   const handleChange = (e) => {
-    const { name, data } = e.target();
-    setFormData((prev) => ({ ...prev, [name]: data }));
+    // Was `e.target()` - calling the DOM element as a function, an instant
+    // TypeError - and destructured `data`, which is not a property of an input.
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   useEffect(() => {
@@ -269,7 +271,10 @@ const AdminHome = () => {
       </div>
       {/* modal here */}
       {Modal && (
-  <div className="flex items-center justify-center bg-black/40 backdrop-blur-sm z-50  transition-all duration-300">
+  // Without `fixed inset-0` this is not an overlay: it rendered inline at the
+  // bottom of the page flow, so clicking "Add Student CSV" appeared to do
+  // nothing until you scrolled down to find it.
+  <div className="fixed inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-50 transition-all duration-300">
     <div className="relative bg-white text-black rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-lg p-8 transform scale-100 animate-fadeIn">
       {/* Close Button */}
       <button
@@ -343,7 +348,6 @@ const AdminHome = () => {
   </div>
 )}
 
-      ;
       <Toaster position="top-right" reverseOrder={false} />
     </div>
   );

@@ -150,6 +150,14 @@ const JobPost = () => {
       await fetchJobs();
       setShowPostPopup(false);
       toast.success("Job posted successfully!");
+      // The job can save while the Google Sheets side fails - typically a share
+      // link instead of an edit link, or a form owned by another Google
+      // account. The server reports that in sheet_warning; showing only
+      // "posted successfully" left the admin believing a responses sheet
+      // existed when it did not.
+      if (res.data?.sheet_warning) {
+        toast.warn(res.data.sheet_warning, { autoClose: 10000 });
+      }
     } catch (err) {
       console.error("Error posting job:", err);
       // Show the API's reason. A bare "Failed to post job" hid genuinely
@@ -610,6 +618,7 @@ const handleGetMetrics = async (jobId) => {
                           <a
                             href={job.responses_sheet_link}
                             target="_blank"
+                            rel="noopener noreferrer"
                             className="flex items-center justify-center gap-1 sm:gap-2 bg-[#10793F] hover:bg-white hover:text-black text-white px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg transition-colors flex-1"
                           >
                             <img
@@ -625,6 +634,7 @@ const handleGetMetrics = async (jobId) => {
                           <a
                             href={job.master_sheet_link}
                             target="_blank"
+                            rel="noopener noreferrer"
                             className="flex items-center justify-center gap-1 sm:gap-2 bg-[#10793F] hover:bg-white hover:text-black text-white px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg transition-colors flex-1"
                           >
                             <img

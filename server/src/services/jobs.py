@@ -18,6 +18,28 @@ ist = pytz.timezone("Asia/Kolkata")
 APPS_SCRIPT_URL = secrets.APPS_SCRIPT_URL
 
 
+def column_letter(index: int) -> str:
+    """
+    Convert a zero-based column index to its spreadsheet letters.
+
+    This was `chr(ord("A") + index)`, which is correct only for the first 26
+    columns. At index 26 it produced "[", making the range "Sheet1![2:[" - which
+    Google rejects, so sync_responses_to_master raised and check_and_update_jobs
+    silently swallowed it. The 27th company posted for a batch therefore broke
+    syncing for that master sheet from then on.
+
+    column_letter(0) == "A", column_letter(25) == "Z", column_letter(26) == "AA".
+    """
+    if index < 0:
+        raise ValueError("Column index cannot be negative")
+    letters = ""
+    index += 1  # spreadsheet columns are 1-based once expressed as letters
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        letters = chr(ord("A") + remainder) + letters
+    return letters
+
+
 async def extract_form_id(form_link: str) -> str:
     """
     Extract the Google Form ID from a form link.
@@ -140,7 +162,7 @@ async def sync_responses_to_master(
             )
 
         col_index = header.index(job_doc.company_name)
-        col_letter = chr(ord("A") + col_index)
+        col_letter = column_letter(col_index)
 
         roll_nums = sheet.values().get(
             spreadsheetId=job_doc.master_sheet_id, range="Sheet1!A2:A"
@@ -168,7 +190,7 @@ def update_column(
         sheets_service = google_service.get_google_service_for_admin(
             admin_doc, "sheets", "v4"
         )
-        col_letter = chr(ord("A") + column_index)
+        col_letter = column_letter(column_index)
         range_notation = f"Sheet1!{col_letter}2:{col_letter}{len(values) + 1}"
         body = {"values": [[v] for v in values]}
 

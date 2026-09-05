@@ -37,4 +37,8 @@ GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/forms.responses.readonly",
 ]
-GOOGLE_APPS_SCRIPT_TIMEOUT = 60
+# Must stay below the serverless function limit (10s Hobby / 60s Pro by
+# default). At 60 the platform killed the invocation before `requests` ever
+# timed out, so the admin saw a gateway error while Apps Script may already have
+# created the sheet and repointed the form.
+GOOGLE_APPS_SCRIPT_TIMEOUT = 8

@@ -127,13 +127,42 @@ async def update_all_jobs_metrics(db: AsyncIOMotorDatabase, admin_doc: dict) -> 
         list[str]: List of job_ids updated.
     """
     updated_jobs = []
+    skipped_jobs = []
     try:
         async for job in db.jobs.find({}):
-            updated = await update_or_create_job_metrics(db, job, admin_doc)
+            # Per-job isolation. A job with no responses sheet raises
+            # HTTPException(400) in calculate_metrics, and the broad
+            # `except Exception` here caught that too and turned it into a 500
+            # for the WHOLE batch - so a single job posted without a form link
+            # made the metrics refresh fail permanently for every other job.
+            try:
+                updated = await update_or_create_job_metrics(db, job, admin_doc)
+            except HTTPException as exc:
+                skipped_jobs.append(str(job.get("_id")))
+                logger.warning(
+                    "Skipping metrics for job_id=%s: %s",
+                    job.get("_id"),
+                    exc.detail,
+                )
+                continue
+            except Exception:
+                skipped_jobs.append(str(job.get("_id")))
+                logger.exception(
+                    "Skipping metrics for job_id=%s after an unexpected error",
+                    job.get("_id"),
+                )
+                continue
+
             if updated:
                 updated_jobs.append(str(job["_id"]))
-        logger.info("Updated metrics for %d jobs", len(updated_jobs))
+
+        logger.info(
+            "Updated metrics for %d jobs (%d skipped)",
+            len(updated_jobs),
+            len(skipped_jobs),
+        )
         return updated_jobs
     except Exception as exc:
+        # Only a failure to iterate the collection at all reaches here now.
         logger.exception("Error updating all jobs metrics")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error") from exc

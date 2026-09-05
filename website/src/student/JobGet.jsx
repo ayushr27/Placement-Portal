@@ -334,7 +334,11 @@ const JobGet = () => {
 
   const handleApply = (job) => {
     if (job.form_link) {
-      window.open(job.form_link, "_blank");
+      // Third arg matters: unlike <a target="_blank">, window.open hands the
+      rel="noopener noreferrer"
+      // opened page a live window.opener, so a malicious or compromised
+      // form_link could navigate this tab to a fake login (reverse tabnabbing).
+      window.open(job.form_link, "_blank", "noopener,noreferrer");
     } else {
       toast.info("Application link not available for this job.");
     }

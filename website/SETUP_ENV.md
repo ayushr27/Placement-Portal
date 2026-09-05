@@ -6,7 +6,7 @@
 
 ```env
 VITE_SERVER=http://localhost:8000
-VITE_CLOUDINARY_CLOUD_NAME=dgsbvayag
+VITE_CLOUDINARY_CLOUD_NAME=your-cloud-name
 VITE_CLOUDINARY_UPLOAD_PRESET=student-profiles
 ```
 
@@ -23,7 +23,7 @@ npm run dev
 cd website
 @"
 VITE_SERVER=http://localhost:8000
-VITE_CLOUDINARY_CLOUD_NAME=dgsbvayag
+VITE_CLOUDINARY_CLOUD_NAME=your-cloud-name
 VITE_CLOUDINARY_UPLOAD_PRESET=student-profiles
 "@ | Out-File -FilePath .env -Encoding utf8
 ```
@@ -32,7 +32,7 @@ VITE_CLOUDINARY_UPLOAD_PRESET=student-profiles
 ```cmd
 cd website
 echo VITE_SERVER=http://localhost:8000 > .env
-echo VITE_CLOUDINARY_CLOUD_NAME=dgsbvayag >> .env
+echo VITE_CLOUDINARY_CLOUD_NAME=your-cloud-name >> .env
 echo VITE_CLOUDINARY_UPLOAD_PRESET=student-profiles >> .env
 ```
 
@@ -41,7 +41,7 @@ echo VITE_CLOUDINARY_UPLOAD_PRESET=student-profiles >> .env
 cd website
 cat > .env << EOF
 VITE_SERVER=http://localhost:8000
-VITE_CLOUDINARY_CLOUD_NAME=dgsbvayag
+VITE_CLOUDINARY_CLOUD_NAME=your-cloud-name
 VITE_CLOUDINARY_UPLOAD_PRESET=student-profiles
 EOF
 ```
@@ -58,7 +58,7 @@ Then edit `.env` if needed.
 ## Important Notes
 
 - The `.env` file is gitignored and won't be committed to version control
-- The cloud name `dgsbvayag` is configured by default in `env-config.js` as a fallback
+- There is no default cloud name: env-config.js deliberately has no fallback, because the previous one pointed at an unrelated developer's Cloudinary account
 - You need to create the upload preset `student-profiles` in your Cloudinary dashboard
 - Make sure the upload preset is set to "Unsigned" mode for client-side uploads
 

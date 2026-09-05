@@ -28,3 +28,9 @@ dist-ssr
 *.sw?
 .env
 .vercel
+
+# Self-sufficient env rules: per-folder subtree branches do not carry the
+# root .gitignore, so .env.local / .env.production must be excluded here too.
+.env
+.env.*
+!.env.example
