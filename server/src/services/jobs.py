@@ -298,7 +298,14 @@ def create_sheet_for_job(form_id: str, job_title: str) -> tuple[str, str | None]
             data = response.json()
             sheet_url = data.get("sheetUrl")
             if not sheet_url:
-                raise Exception("sheetUrl missing in response")
+                # Apps Script reports failures as 200 + {"error": ...}. Passing
+                # its message through matters: "no item with the given ID" tells
+                # the admin the link is wrong or the form belongs to another
+                # account, whereas "sheetUrl missing" tells them nothing.
+                raise Exception(
+                    data.get("error")
+                    or "Apps Script returned no sheetUrl and no error"
+                )
             # publishedUrl is what students must open to apply; the edit link
             # the admin pasted must never be handed to them.
             return sheet_url, data.get("publishedUrl")

@@ -11,7 +11,11 @@
   </head>
   <body>
     <div id="root"></div>
-    <script src="env-config.js"></script>
+    <!-- Absolute path: a relative one resolves against the current route, so
+         on /admin/ayush the browser fetched /admin/env-config.js, which the SPA
+         rewrite answered with index.html and the parser reported as
+         "Uncaught SyntaxError: Unexpected token '<'". -->
+    <script src="/env-config.js"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

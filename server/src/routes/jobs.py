@@ -41,11 +41,28 @@ async def create_job(
         )
 
     try:
-        form_id = await jobs_service.extract_form_id(str(payload.form_link))
-        sheet_link, published_url = jobs_service.create_sheet_for_job(
-            form_id=form_id,
-            job_title=payload.job_designation,
-        )
+        try:
+            form_id = await jobs_service.extract_form_id(str(payload.form_link))
+        except ValueError as e:
+            # e.g. a share link was pasted instead of the edit link.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            )
+
+        try:
+            sheet_link, published_url = jobs_service.create_sheet_for_job(
+                form_id=form_id,
+                job_title=payload.job_designation,
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Apps Script failures are actionable by the admin (wrong link,
+            # form owned by another account), so pass the reason through.
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not create the responses sheet: {e}",
+            )
 
         # The admin pastes the form's EDIT link so Apps Script can open it, but
         # students must receive the public link. Swap it before saving.

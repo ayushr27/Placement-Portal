@@ -3,7 +3,7 @@ from typing import Optional, List, Union
 
 import pytz
 from bson import ObjectId
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
 
 
 def ist() -> datetime:
@@ -114,7 +114,38 @@ class Token(BaseModel):
     token_type: str
 
 
-class JobCreate(BaseModel):
+class _BlankToNoneMixin(BaseModel):
+    """
+    Treat empty form fields as absent.
+
+    The admin job form initialises every optional input to "" and posts them
+    as-is, so leaving the deadline blank sent application_deadline="" and
+    pydantic rejected the whole request with a 422 that the UI showed only as
+    "failed to post job". Empty strings become None, and blank entries are
+    dropped from list fields.
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_strings_to_none(cls, data):
+        if not isinstance(data, dict):
+            return data
+        cleaned = {}
+        for key, value in data.items():
+            if isinstance(value, str) and not value.strip():
+                cleaned[key] = None
+            elif isinstance(value, list):
+                pruned = [
+                    v for v in value
+                    if not (isinstance(v, str) and not v.strip())
+                ]
+                cleaned[key] = pruned or None
+            else:
+                cleaned[key] = value
+        return cleaned
+
+
+class JobCreate(_BlankToNoneMixin):
     company_name: str = Field(..., min_length=2, max_length=200)
     website: Optional[str] = None
     linkedin_link: Optional[str] = None
@@ -137,7 +168,7 @@ class JobCreate(BaseModel):
     application_deadline: Optional[datetime] = None
 
 
-class JobUpdate(BaseModel):
+class JobUpdate(_BlankToNoneMixin):
     company_name: str = Field(..., min_length=2, max_length=200)
     website: Optional[str] = None
     linkedin_link: Optional[str] = None

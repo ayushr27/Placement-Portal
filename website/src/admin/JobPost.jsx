@@ -151,8 +151,21 @@ const JobPost = () => {
       setShowPostPopup(false);
       toast.success("Job posted successfully!");
     } catch (err) {
-      // console.error("Error posting job:", err);
-      toast.error("Failed to post job");
+      console.error("Error posting job:", err);
+      // Show the API's reason. A bare "Failed to post job" hid genuinely
+      // actionable messages, e.g. a 422 listing which field is invalid, or a
+      // 502 saying the form link could not be opened.
+      const detail = err?.response?.data?.detail;
+      let message;
+      if (typeof detail === "string") {
+        message = detail;
+      } else if (Array.isArray(detail)) {
+        // FastAPI validation errors: [{loc: ["body","batch"], msg: "..."}]
+        message = detail
+          .map((d) => `${(d.loc || []).slice(1).join(".") || "field"}: ${d.msg}`)
+          .join("; ");
+      }
+      toast.error(message || "Failed to post job");
     }
   };
 const handleGetMetrics = async (jobId) => {
