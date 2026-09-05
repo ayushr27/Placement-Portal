@@ -8,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.config import secrets
 from src.routes.schemas import TokenRequest
 from src.database import get_database
+from src import logger
 import pytz
 
 
@@ -28,10 +29,15 @@ async def get_user_from_collection(db: AsyncIOMotorDatabase, username: str, role
         if user:
             user["id"] = str(user["_id"])
         return user
+    except HTTPException:
+        raise
     except Exception as e:
+        # Log the driver error, but never echo connection strings, hostnames or
+        # topology details back to an unauthenticated caller.
+        logger.error("Database error looking up user: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
+            detail="Database error"
         )
 
 
@@ -57,10 +63,15 @@ async def get_user(
             return user
 
         return None
+    except HTTPException:
+        raise
     except Exception as e:
+        # Log the driver error, but never echo connection strings, hostnames or
+        # topology details back to an unauthenticated caller.
+        logger.error("Database error looking up user: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
+            detail="Database error"
         )
 
 
