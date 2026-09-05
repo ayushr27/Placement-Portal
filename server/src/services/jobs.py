@@ -26,18 +26,24 @@ async def extract_form_id(form_link: str) -> str:
     literal "e" segment of the share form and returned "e" as the id, so the
     far more common link shape silently produced a wrong id.
     """
-    match = re.search(r"/d/e/([a-zA-Z0-9_-]+)", form_link) or re.search(
-        r"/d/([a-zA-Z0-9_-]+)", form_link
-    )
-    if not match:
+    # A share link (/forms/d/e/<published id>/viewform) carries the *published*
+    # id, which is not the form's file id and cannot be opened by Apps Script.
+    # Only the edit link exposes the usable id, so say so explicitly instead of
+    # returning the literal "e" that the old pattern produced.
+    if re.search(r"/forms/d/e/", form_link):
+        logger.error("Share link supplied instead of edit link: %s", form_link)
+        raise ValueError(
+            "Please paste the form's EDIT link "
+            "(https://docs.google.com/forms/d/<id>/edit), not the share link. "
+            "The share link does not contain an id Google Apps Script can open."
+        )
+
+    match = re.search(r"/d/([a-zA-Z0-9_-]+)", form_link)
+    if not match or match.group(1) in {"e", "d"}:
         logger.error("Invalid Google Form link provided: %s", form_link)
         raise ValueError("Invalid Google Form link")
 
-    form_id = match.group(1)
-    if form_id in {"e", "d"}:
-        logger.error("Could not parse a form id from link: %s", form_link)
-        raise ValueError("Invalid Google Form link")
-    return form_id
+    return match.group(1)
 
 
 async def check_and_update_jobs(db: AsyncIOMotorDatabase):
@@ -264,8 +270,13 @@ async def _ensure_company_column(
         raise
 
 
-def create_sheet_for_job(form_id: str, job_title: str) -> str:
-    """Create a new Google Sheet for a job via Apps Script."""
+def create_sheet_for_job(form_id: str, job_title: str) -> tuple[str, str | None]:
+    """
+    Create a new Google Sheet for a job via Apps Script.
+
+    Returns:
+        tuple: (responses sheet URL, the form's published URL or None).
+    """
     try:
         payload = {"formId": form_id, "jobTitle": job_title}
         logger.info(
@@ -288,7 +299,9 @@ def create_sheet_for_job(form_id: str, job_title: str) -> str:
             sheet_url = data.get("sheetUrl")
             if not sheet_url:
                 raise Exception("sheetUrl missing in response")
-            return sheet_url
+            # publishedUrl is what students must open to apply; the edit link
+            # the admin pasted must never be handed to them.
+            return sheet_url, data.get("publishedUrl")
 
         raise Exception(
             f"Apps Script returned {response.status_code}: {response.text}"

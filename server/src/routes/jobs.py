@@ -42,10 +42,15 @@ async def create_job(
 
     try:
         form_id = await jobs_service.extract_form_id(str(payload.form_link))
-        sheet_link = jobs_service.create_sheet_for_job(
+        sheet_link, published_url = jobs_service.create_sheet_for_job(
             form_id=form_id,
             job_title=payload.job_designation,
         )
+
+        # The admin pastes the form's EDIT link so Apps Script can open it, but
+        # students must receive the public link. Swap it before saving.
+        if published_url:
+            payload.form_link = published_url
 
         result = await jobs_service.create_job_with_links(
             db=db,
