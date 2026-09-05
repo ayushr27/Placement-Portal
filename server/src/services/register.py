@@ -8,9 +8,10 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from fastapi import HTTPException
 from src.services.schemas import StudentCreate, StudentInDB
 from src.routes.utils import security
-from src.services.utils import send_email_task
+from fastapi import BackgroundTasks
+from src.services.utils import queue_email_task
 from src.services.constants import ACCOUNT_CREATION_EMAIL_BODY, BATCH_SIZE, BATCH_DELAY_SECONDS
-from src.services import google_service
+from src import logger
 
 
 def generate_random_password(length: int = 8) -> str:
@@ -26,7 +27,7 @@ def generate_random_password(length: int = 8) -> str:
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 
-async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> dict:
+async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes, background_tasks: BackgroundTasks | None = None) -> dict:
     csv_text = file_bytes.decode("utf-8")
     reader = csv.DictReader(io.StringIO(csv_text))
 
@@ -79,6 +80,7 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
 
     if to_insert:
         await db.students.insert_many(to_insert)
+        logger.info(f"Inserted {len(to_insert)} credentials to database")
 
         # Send mails in batches
         for i in range(0, len(creds_to_send), BATCH_SIZE):
@@ -90,7 +92,7 @@ async def process_student_csv(db: AsyncIOMotorDatabase, file_bytes: bytes) -> di
                     username=cred["username"],
                     password=cred["password"],
                 )
-                send_email_task.delay(cred["email"], subject, body)
+                queue_email_task(background_tasks, cred["email"], subject, body)
 
             if i + BATCH_SIZE < len(creds_to_send):
                 await asyncio.sleep(BATCH_DELAY_SECONDS)
@@ -126,18 +128,8 @@ async def create_admin(db: AsyncIOMotorDatabase, admin_data: dict) -> dict:
     result = await db.admins.insert_one(admin_data)
     return {"id": str(result.inserted_id), "message": "Admin created successfully"}
 
-
-async def create_job_sheet_for_admin(db: AsyncIOMotorDatabase, admin_email: str, job_title: str):
-    admin_doc = await db.admins.find_one({"email": admin_email})
-    if not admin_doc:
-        raise HTTPException(status_code=404, detail="Admin not found")
-    spreadsheet_id = await google_service.create_sheet(admin_doc, f"Job - {job_title}")
-    return {"spreadsheet_id": spreadsheet_id}
-
-
-async def append_student_to_job_sheet(db: AsyncIOMotorDatabase, admin_email: str, spreadsheet_id: str, student_data: list):
-    admin_doc = await db.admins.find_one({"email": admin_email})
-    if not admin_doc:
-        raise HTTPException(status_code=404, detail="Admin not found")
-    await google_service.append_to_sheet(admin_doc, spreadsheet_id, student_data)
-    return {"message": "Student data appended to sheet successfully"}
+# create_job_sheet_for_admin / append_student_to_job_sheet were removed: both
+# were unreachable and neither could run. The first awaited the synchronous
+# google_service.create_sheet and omitted its required roll_numbers argument;
+# the second called google_service.append_to_sheet, which does not exist.
+# Job-sheet creation is handled in src/services/jobs.py.

@@ -1,11 +1,13 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, List, Union
 from datetime import datetime
+from typing import Optional, List, Union
+
 import pytz
 from bson import ObjectId
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
-def ist():
+def ist() -> datetime:
+    """Return the current time in Asia/Kolkata timezone."""
     tz = pytz.timezone("Asia/Kolkata")
     return datetime.now(tz)
 
@@ -33,8 +35,28 @@ class TokenRequest(BaseModel):
     password: str = Field(..., min_length=6)
 
 
+# The forgot-password flow used bare query parameters, which put the OTP, the
+# reset token and the new plaintext password into request URLs and therefore
+# into access logs. These bodies keep them out of the URL.
+class ForgotPasswordRequestSchema(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordVerifySchema(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=6, max_length=6)
+
+
+class ForgotPasswordResetSchema(BaseModel):
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(
+        ..., min_length=6, description="New password must be at least 6 characters"
+    )
+
+
 class UserResponseStudent(BaseModel):
     id: Optional[str] = Field(default=None, alias="_id", description="Unique identifier for the student")
+    profile_pic_link: Optional[str] = Field(None, description="Link to the student's profile picture")
     name: str = Field(..., description="Full name of the student")
     gender: Optional[str] = Field(None, description="Gender of the student")
     email: EmailStr = Field(..., description="Email address of the student")
@@ -55,6 +77,8 @@ class UserResponseStudent(BaseModel):
     linkedin_link: Optional[str] = Field(None, description="Link to LinkedIn profile")
     github_link: Optional[str] = Field(None, description="Link to GitHub profile")
     resume_link: Optional[str] = Field(None, description="Link to uploaded resume")
+    aadhar_card_link: Optional[str] = Field(None, description="Link to Aadhar card document")
+    pan_card_link: Optional[str] = Field(None, description="Link to PAN card document")
     role: str = Field("student", description="Role of the user, default is 'student'")
     career_path: Optional[str] = Field(None, description="Future career preference: Higher Studies or Placements")
     has_edited_profile: bool = Field(False, description="Indicates whether the student has edited their profile")
@@ -92,45 +116,47 @@ class Token(BaseModel):
 
 class JobCreate(BaseModel):
     company_name: str = Field(..., min_length=2, max_length=200)
-    website: Optional[str] = Field(None)
-    linkedin_link: Optional[str] = Field(None)
-    address: Optional[str] = Field(None)
+    website: Optional[str] = None
+    linkedin_link: Optional[str] = None
+    address: Optional[str] = None
     batch: List[int] = Field(..., min_items=1)
-    work_location: Optional[str] = Field(None)
-    job_designation: Optional[str] = Field(None)
-    type_of_employment: Optional[str] = Field(None)
-    eligibility_criteria: Optional[str] = Field(None)
-    applicable_branch: Optional[str] = Field(None)
-    stipend: Optional[str] = Field(None)
-    ctc: Optional[str] = Field(None)
-    other_benefits: Optional[str] = Field(None)
-    bond: Optional[str] = Field(None)
-    job_description: Optional[str] = Field(None)
-    about_company: Optional[str] = Field(None)
+    work_location: Optional[str] = None
+    job_designation: Optional[str] = None
+    type_of_employment: Optional[str] = None
+    eligibility_criteria: Optional[str] = None
+    cgpa_eligibility: Optional[float] = Field(None, ge=0.0, le=10.0)
+    applicable_branch: List[str] = Field(..., min_items=1)
+    stipend: Optional[str] = None
+    ctc: Optional[str] = None
+    other_benefits: Optional[str] = None
+    bond: Optional[str] = None
+    job_description: Optional[str] = None
+    about_company: Optional[str] = None
     selection_process: Optional[List[str]] = Field(None, min_items=1)
-    form_link: Optional[str] = Field(None)
+    form_link: Optional[str] = None
     application_deadline: Optional[datetime] = None
 
 
 class JobUpdate(BaseModel):
     company_name: str = Field(..., min_length=2, max_length=200)
-    website: Optional[str] = Field(None)
-    linkedin_link: Optional[str] = Field(None)
-    address: Optional[str] = Field(None)
+    website: Optional[str] = None
+    linkedin_link: Optional[str] = None
+    address: Optional[str] = None
     batch: List[int] = Field(..., min_items=1)
-    work_location: Optional[str] = Field(None)
-    job_designation: Optional[str] = Field(None)
-    type_of_employment: Optional[str] = Field(None)
-    eligibility_criteria: Optional[str] = Field(None)
-    applicable_branch: Optional[str] = Field(None)
-    stipend: Optional[str] = Field(None)
-    ctc: Optional[str] = Field(None)
-    other_benefits: Optional[str] = Field(None)
-    bond: Optional[str] = Field(None)
-    job_description: Optional[str] = Field(None)
-    about_company: Optional[str] = Field(None)
+    work_location: Optional[str] = None
+    job_designation: Optional[str] = None
+    type_of_employment: Optional[str] = None
+    eligibility_criteria: Optional[str] = None
+    cgpa_eligibility: Optional[float] = Field(None, ge=0.0, le=10.0)
+    applicable_branch: List[str] = Field(..., min_items=1)
+    stipend: Optional[str] = None
+    ctc: Optional[str] = None
+    other_benefits: Optional[str] = None
+    bond: Optional[str] = None
+    job_description: Optional[str] = None
+    about_company: Optional[str] = None
     selection_process: Optional[List[str]] = Field(None, min_items=1)
-    form_link: Optional[str] = Field(None)
+    form_link: Optional[str] = None
     application_deadline: Optional[datetime] = None
 
 
@@ -162,7 +188,8 @@ class JobResponse(BaseModel):
     job_designation: Optional[str] = None
     type_of_employment: Optional[str] = None
     eligibility_criteria: Optional[str] = None
-    applicable_branch: Optional[str] = None
+    cgpa_eligibility: Optional[float] = None
+    applicable_branch: List[str] = Field(..., min_items=1)
     stipend: Optional[str] = None
     ctc: Optional[str] = None
     other_benefits: Optional[str] = None
@@ -215,6 +242,7 @@ class AdminEditStudentProfile(BaseModel):
 
 
 class StudentEditProfile(BaseModel):
+    profile_pic_link: Optional[str] = None
     name: Optional[str] = None
     gender: Optional[str] = None
     email: EmailStr
@@ -259,5 +287,7 @@ class StudentEditProfile(BaseModel):
     linkedin_link: Optional[str] = None
     github_link: Optional[str] = None
     resume_link: Optional[str] = None
+    aadhar_card_link: Optional[str] = None
+    pan_card_link: Optional[str] = None
     role: str = "student"
     career_path: Optional[str] = None

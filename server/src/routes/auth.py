@@ -1,9 +1,17 @@
 # src/routes/auth.py
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from src.routes.schemas import TokenResponse, PasswordResetSchema
+from src.routes.schemas import (
+    TokenResponse,
+    PasswordResetSchema,
+    ForgotPasswordRequestSchema,
+    ForgotPasswordVerifySchema,
+    ForgotPasswordResetSchema,
+)
 from src.database import get_database
 from src.routes.utils import security
 from src.services import auth as auth_service
@@ -27,6 +35,8 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error during login: {e}")
         raise HTTPException(
@@ -61,6 +71,8 @@ async def reset_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error during password reset: {e}")
         raise HTTPException(
@@ -71,8 +83,10 @@ async def reset_password(
 
 @router.post("/forgot-password/request")
 async def forgot_password_request(
-    email: str, db: AsyncIOMotorDatabase = Depends(get_database)
+    payload: ForgotPasswordRequestSchema,
+    db: AsyncIOMotorDatabase = Depends(get_database),
 ):
+    email = payload.email
     try:
         return await auth_service.forgot_password_request_service(email, db)
     except ValueError as e:
@@ -81,6 +95,8 @@ async def forgot_password_request(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error during forgot password request: {e}")
         raise HTTPException(
@@ -91,16 +107,22 @@ async def forgot_password_request(
 
 @router.post("/forgot-password/verify")
 async def forgot_password_verify(
-    email: str, otp: str, db: AsyncIOMotorDatabase = Depends(get_database)
+    payload: ForgotPasswordVerifySchema,
+    db: AsyncIOMotorDatabase = Depends(get_database),
 ):
+    email = payload.email
     try:
-        return await auth_service.forgot_password_verify_service(email, otp, db)
+        return await auth_service.forgot_password_verify_service(
+            email, payload.otp, db
+        )
     except ValueError as e:
         logger.warning(f"OTP verification failed for {email}: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error during OTP verification for {email}: {e}")
         raise HTTPException(
@@ -111,16 +133,21 @@ async def forgot_password_verify(
 
 @router.post("/forgot-password/reset")
 async def forgot_password_reset(
-    new_password: str, token: str, db: AsyncIOMotorDatabase = Depends(get_database)
+    payload: ForgotPasswordResetSchema,
+    db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     try:
-        return await auth_service.forgot_password_reset_service(new_password, token, db)
+        return await auth_service.forgot_password_reset_service(
+            payload.new_password, payload.token, db
+        )
     except ValueError as e:
         logger.warning(f"Password reset with token failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error during password reset with token: {e}")
         raise HTTPException(
@@ -133,6 +160,8 @@ async def forgot_password_reset(
 async def google_login():
     try:
         return {"auth_url": auth_service.get_google_auth_url()}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to generate Google login URL: {e}")
         raise HTTPException(
@@ -143,23 +172,26 @@ async def google_login():
 
 @router.get("/google-callback")
 async def google_callback(
-    code: str, db: AsyncIOMotorDatabase = Depends(get_database)
+    code: str,
+    state: Optional[str] = None,
+    db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
-    After Google redirects back with ?code=...
+    After Google redirects back with ?code=...&state=...
     """
     try:
-        return await auth_service.handle_admin_google_callback(code, db)
+        return await auth_service.handle_admin_google_callback(code, db, state=state)
     except ValueError as e:
-        logger.warning(f"Google callback failed with invalid code {code}: {e}")
+        logger.warning(f"Google callback failed for an invalid code: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error during Google callback: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Google callback handling failed",
         )
-

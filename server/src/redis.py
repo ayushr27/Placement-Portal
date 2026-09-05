@@ -1,51 +1,82 @@
 import json
-import ssl
+from typing import Any, Optional
 
-from celery import Celery
 from upstash_redis import Redis
 
+from src import logger
 from src.config import secrets
 
 
-redis = Redis(
-    url=secrets.UPSTASH_REDIS_REST_URL,
-    token=secrets.UPSTASH_REDIS_REST_TOKEN,
-)
+# --- Redis Cache Configuration ---
+# Caching is an optimisation, never a requirement. If Upstash is not configured
+# (or is failing), every helper below degrades to a no-op / cache miss so that
+# request handlers still serve from MongoDB instead of returning a 500.
+redis: Optional[Redis] = None
 
-celery = Celery(
-    "worker",
-    broker=secrets.CELERY_REDIS_URL,
-    backend=secrets.CELERY_REDIS_URL,
-)
-
-celery.conf.update(
-    broker_use_ssl={
-        "ssl_cert_reqs": ssl.CERT_NONE,
-    },
-    redis_backend_use_ssl={
-        "ssl_cert_reqs": ssl.CERT_NONE,
-    },
-    task_serializer="json",
-    result_serializer="json",
-    accept_content=["json"],
-    timezone="Asia/Kolkata",
-    enable_utc=True,
-)
+if secrets.redis_enabled:
+    try:
+        redis = Redis(
+            url=secrets.UPSTASH_REDIS_REST_URL,
+            token=secrets.UPSTASH_REDIS_REST_TOKEN,
+        )
+    except Exception as exc:  # pragma: no cover - construction rarely fails
+        logger.warning("Redis unavailable, continuing without cache: %s", exc)
+else:
+    logger.info("Upstash Redis not configured; caching disabled.")
 
 
-def cache_set(key: str, value, expire: int = 3600):
-    """Set a key in Redis with optional expiry (default: 1 hour)."""
-    redis.set(key, json.dumps(value, default=str), ex=expire)
+def cache_set(key: str, value: Any, expire: int = 3600) -> None:
+    """
+    Set a key-value pair in Redis with an optional expiry time.
+
+    Args:
+        key (str): The Redis key.
+        value: The value to store (will be serialized to JSON).
+        expire (int, optional): Expiration time in seconds. Defaults to 3600.
+    """
+    if redis is None:
+        return
+    try:
+        redis.set(key, json.dumps(value, default=str), ex=expire)
+    except Exception as exc:
+        logger.warning("cache_set failed for %s: %s", key, exc)
 
 
-def cache_get(key: str):
-    """Get a key from Redis (returns Python dict if JSON)."""
-    val = redis.get(key)
+def cache_get(key: str) -> Any:
+    """
+    Retrieve a value from Redis by key.
+
+    Args:
+        key (str): The Redis key.
+
+    Returns:
+        The deserialized Python object if found, otherwise None.
+    """
+    if redis is None:
+        return None
+    try:
+        val = redis.get(key)
+    except Exception as exc:
+        logger.warning("cache_get failed for %s: %s", key, exc)
+        return None
     if val:
-        return json.loads(val)
+        try:
+            return json.loads(val)
+        except (TypeError, ValueError):
+            logger.warning("Discarding corrupt cache entry for %s", key)
     return None
 
 
-def cache_delete(key: str):
-    """Delete a cache key."""
-    redis.delete(key)
+def cache_delete(key: str) -> None:
+    """
+    Delete a key from Redis.
+
+    Args:
+        key (str): The Redis key to delete.
+    """
+    if redis is None:
+        return
+    try:
+        redis.delete(key)
+    except Exception as exc:
+        logger.warning("cache_delete failed for %s: %s", key, exc)

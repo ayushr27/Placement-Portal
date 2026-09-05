@@ -1,4 +1,20 @@
 venv/
+.venv/
 *.log
+logs/
 .pytest_cache/
 .vscode
+__pycache__/
+*.py[cod]
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+.secrets
+
+# OS / editor
+.DS_Store
+
+# Vercel
+.vercel

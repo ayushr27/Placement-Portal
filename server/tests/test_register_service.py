@@ -74,12 +74,12 @@ async def test_new_student_insert_and_email(monkeypatch):
     file_bytes = csv_content.encode("utf-8")
 
     sent_emails = []
-    def fake_send_email(to, subject, body):
+    def fake_send_email(background_task, to, subject, body):
         sent_emails.append((to, subject, body))
 
-    monkeypatch.setattr("src.services.register.send_email_task.delay", fake_send_email)
+    monkeypatch.setattr("src.services.register.queue_email_task", fake_send_email)
 
-    result = await process_student_csv(db, file_bytes)
+    result = await process_student_csv(db, file_bytes, background_tasks=None)
 
     assert result["inserted_count"] == 1
     assert "john@example.com" in result["inserted_emails"]

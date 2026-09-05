@@ -1,3 +1,7 @@
+import time
+from collections import OrderedDict
+from typing import Optional
+
 import requests
 from fastapi import HTTPException, status
 from google_auth_oauthlib.flow import Flow
@@ -48,6 +52,45 @@ def get_oauth_flow() -> Flow:
     )
 
 
+# Issued OAuth state values, kept until the callback consumes them. Process
+# local: for a multi-instance deployment move this into Redis.
+_PENDING_STATES: "OrderedDict[str, float]" = OrderedDict()
+STATE_TTL_SECONDS = 600
+_MAX_PENDING_STATES = 256
+
+
+def _remember_state(state: str) -> None:
+    """Record an issued state value and evict expired/oldest entries."""
+    now = time.time()
+    for key, created in list(_PENDING_STATES.items()):
+        if now - created > STATE_TTL_SECONDS:
+            _PENDING_STATES.pop(key, None)
+    _PENDING_STATES[state] = now
+    while len(_PENDING_STATES) > _MAX_PENDING_STATES:
+        _PENDING_STATES.popitem(last=False)
+
+
+def consume_state(state: Optional[str]) -> None:
+    """
+    Validate and burn a state value returned by Google.
+
+    Without this check the callback accepts any code an attacker can induce the
+    browser to submit (OAuth CSRF).
+    """
+    if not state or state not in _PENDING_STATES:
+        logger.warning("Google OAuth callback with missing or unknown state")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OAuth state",
+        )
+    created = _PENDING_STATES.pop(state)
+    if time.time() - created > STATE_TTL_SECONDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OAuth state",
+        )
+
+
 def get_google_auth_url() -> str:
     """
     Get Google OAuth authorization URL.
@@ -57,9 +100,10 @@ def get_google_auth_url() -> str:
     """
     try:
         flow = get_oauth_flow()
-        auth_url, _ = flow.authorization_url(
+        auth_url, state = flow.authorization_url(
             prompt="consent", access_type="offline", include_granted_scopes="true"
         )
+        _remember_state(state)
         return auth_url
     except Exception as exc:
         logger.error("Error creating Google auth URL: %s", str(exc))
@@ -207,7 +251,7 @@ def create_sheet(admin_doc: dict, title: str, roll_numbers: list[str]) -> str:
         roll_values = [[r] for r in roll_numbers]
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range=f"Sheet1!A2:A{len(roll_numbers)+1}",
+            range=f"Sheet1!A2:A{len(roll_numbers) + 1}",
             valueInputOption="RAW",
             body={"values": roll_values},
         ).execute()

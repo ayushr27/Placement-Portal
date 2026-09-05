@@ -19,6 +19,7 @@ class StudentCreate(BaseModel):
 
 class StudentInDB(BaseModel):
     id: Optional[str] = Field(default=None, alias="_id")
+    profile_pic_link: Optional[str] = None
     name: str
     gender: Optional[str] = None
     email: EmailStr
@@ -39,6 +40,8 @@ class StudentInDB(BaseModel):
     linkedin_link: Optional[str] = None
     github_link: Optional[str] = None
     resume_link: Optional[str] = None
+    aadhar_card_link: Optional[str] = None
+    pan_card_link: Optional[str] = None
     hashed_password: str
     role: str = "student"
     has_edited_profile: bool = False

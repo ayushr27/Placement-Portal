@@ -27,13 +27,14 @@ async def get_student_profile(current_user: dict = Depends(security.get_current_
             detail="Access denied: Only students can access this endpoint",
         )
 
-    cache_key = f"profile:student:{current_user.get('_id')}"
+    cache_key = f"profile:student:{current_user.get('roll_number')}"
     cached = cache_get(cache_key)
     if cached:
         return cached
 
     profile = {
         "_id": str(current_user.get("_id")),
+        "profile_pic_link": current_user.get("profile_pic_link"),
         "name": current_user.get("name"),
         "gender": current_user.get("gender"),
         "email": current_user.get("email"),
@@ -47,6 +48,8 @@ async def get_student_profile(current_user: dict = Depends(security.get_current_
         "role": current_user.get("role", "student"),
         "career_path": current_user.get("career_path"),
         "resume_link": current_user.get("resume_link"),
+        "aadhar_card_link": current_user.get("aadhar_card_link"),
+        "pan_card_link": current_user.get("pan_card_link"),
         "github_link": current_user.get("github_link"),
         "linkedin_link": current_user.get("linkedin_link"),
         "current_address": current_user.get("current_address"),
@@ -95,7 +98,7 @@ async def get_admin_profile(current_user: dict = Depends(security.get_current_us
 
 @router.put("/admin/student_update/{roll_number}", response_model=UserResponseStudent)
 async def admin_update_student_profile(
-    update: StudentEditProfile = Depends(),
+    update: StudentEditProfile,
     roll_number: str = Path(..., description="Roll number of the student to update"),
     db: AsyncIOMotorDatabase = Depends(get_database),
     current_user: dict = Depends(security.get_current_user),
@@ -124,6 +127,7 @@ async def admin_update_student_profile(
     )
     profile_response = {
         "_id": str(updated_student["_id"]),
+        "profile_pic_link": updated_student.get("profile_pic_link"),
         "name": updated_student.get("name"),
         "gender": updated_student.get("gender"),
         "email": updated_student.get("email"),
@@ -137,6 +141,8 @@ async def admin_update_student_profile(
         "role": updated_student.get("role", "student"),
         "career_path": updated_student.get("career_path"),
         "resume_link": updated_student.get("resume_link"),
+        "aadhar_card_link": updated_student.get("aadhar_card_link"),
+        "pan_card_link": updated_student.get("pan_card_link"),
         "github_link": updated_student.get("github_link"),
         "linkedin_link": updated_student.get("linkedin_link"),
         "current_address": updated_student.get("current_address"),
@@ -196,6 +202,7 @@ async def update_student_profile(
     )
     profile_response = {
         "_id": str(updated_student["_id"]),
+        "profile_pic_link": updated_student.get("profile_pic_link"),
         "name": updated_student.get("name"),
         "gender": updated_student.get("gender"),
         "email": updated_student.get("email"),
@@ -209,6 +216,8 @@ async def update_student_profile(
         "role": updated_student.get("role", "student"),
         "career_path": updated_student.get("career_path"),
         "resume_link": updated_student.get("resume_link"),
+        "aadhar_card_link": updated_student.get("aadhar_card_link"),
+        "pan_card_link": updated_student.get("pan_card_link"),
         "github_link": updated_student.get("github_link"),
         "linkedin_link": updated_student.get("linkedin_link"),
         "current_address": updated_student.get("current_address"),
@@ -242,6 +251,7 @@ async def get_student_profile_by_admin(
 
     profile_response = {
         "_id": str(student["_id"]),
+        "profile_pic_link": student.get("profile_pic_link"),
         "name": student.get("name"),
         "gender": student.get("gender"),
         "email": student.get("email"),
@@ -255,6 +265,8 @@ async def get_student_profile_by_admin(
         "role": student.get("role", "student"),
         "career_path": student.get("career_path"),
         "resume_link": student.get("resume_link"),
+        "aadhar_card_link": student.get("aadhar_card_link"),
+        "pan_card_link": student.get("pan_card_link"),
         "github_link": student.get("github_link"),
         "linkedin_link": student.get("linkedin_link"),
         "current_address": student.get("current_address"),

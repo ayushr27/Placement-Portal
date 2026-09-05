@@ -1,11 +1,19 @@
 from datetime import datetime, timedelta, timezone
-import random
+import secrets as token_secrets
+from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from fastapi import HTTPException, status
 from src.routes.utils import get_user, security
 from src.services.utils import send_email
 from src.services import google_service
 from src import logger
+
+# Maximum wrong OTP guesses before the reset request is discarded.
+MAX_OTP_ATTEMPTS = 5
+
+# Compared against when the username is unknown, so that a missing user costs
+# the same time as a wrong password. Generated once at import.
+DUMMY_PASSWORD_HASH = security.hash_password(token_secrets.token_urlsafe(16))
 
 
 async def login_user(username: str, password: str, db: AsyncIOMotorDatabase):
@@ -25,9 +33,13 @@ async def login_user(username: str, password: str, db: AsyncIOMotorDatabase):
     """
     try:
         user = await get_user(username, db)
-        if not user or not security.verify_password(
-            password, user.get("hashed_password", "")
-        ):
+
+        # Always run a bcrypt comparison, even when the user does not exist, so
+        # response time does not reveal which usernames are registered.
+        stored_hash = user.get("hashed_password", "") if user else DUMMY_PASSWORD_HASH
+        password_ok = security.verify_password(password, stored_hash)
+
+        if not user or not password_ok:
             logger.warning("Failed login attempt for username: %s", username)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password"
@@ -44,6 +56,8 @@ async def login_user(username: str, password: str, db: AsyncIOMotorDatabase):
         )
         logger.info("User %s logged in successfully", username)
         return {"access_token": token, "token_type": "bearer"}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error during login for %s: %s", username, str(exc))
         raise
@@ -59,7 +73,9 @@ def get_google_auth_url() -> str:
     return google_service.get_google_auth_url()
 
 
-async def handle_admin_google_callback(code: str, db: AsyncIOMotorDatabase):
+async def handle_admin_google_callback(
+    code: str, db: AsyncIOMotorDatabase, state: Optional[str] = None
+):
     """
     Handle Google OAuth callback for admin login.
 
@@ -74,6 +90,8 @@ async def handle_admin_google_callback(code: str, db: AsyncIOMotorDatabase):
         HTTPException: If authentication fails or user not authorized.
     """
     try:
+        # Reject callbacks we did not initiate (OAuth CSRF).
+        google_service.consume_state(state)
         tokens, user_info = google_service.exchange_code_for_tokens(code)
         email = (user_info or {}).get("email")
         if not email:
@@ -90,6 +108,8 @@ async def handle_admin_google_callback(code: str, db: AsyncIOMotorDatabase):
         )
         logger.info("Admin %s logged in via Google", email)
         return {"access_token": jwt_token, "token_type": "bearer"}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Google OAuth callback error: %s", str(exc))
         raise
@@ -133,6 +153,8 @@ async def reset_user_password(
         )
         logger.info("Password updated for user: %s", username)
         return {"status": "Password updated successfully"}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Password reset error for %s: %s", username, str(exc))
         raise
@@ -157,7 +179,9 @@ async def forgot_password_request_service(email: str, db: AsyncIOMotorDatabase):
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-        otp = str(random.randint(100000, 999999))
+        # secrets.randbelow is CSPRNG-backed; random.randint is predictable and
+        # must never generate a credential.
+        otp = f"{token_secrets.randbelow(1_000_000):06d}"
         hashed_otp = security.hash_password(otp)
         expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
 
@@ -169,11 +193,14 @@ async def forgot_password_request_service(email: str, db: AsyncIOMotorDatabase):
                 "expiry": expiry,
                 "purpose": "password_reset",
                 "verified": False,
+                "attempts": 0,
             }
         )
         await send_email(email, "Your password reset code", f"Your OTP is: {otp}")
         logger.info("OTP sent to %s", email)
         return {"message": "OTP sent to your email"}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error in forgot password request for %s: %s", email, str(exc))
         raise
@@ -202,12 +229,25 @@ async def forgot_password_verify_service(
         )
         if not token_doc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No OTP request found")
-        if not security.verify_password(otp, token_doc["otp_hash"]):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP")
+
+        # A 6-digit OTP is trivially brute-forceable without a cap.
+        if token_doc.get("attempts", 0) >= MAX_OTP_ATTEMPTS:
+            await db["forgot-password"].delete_many({"email": email})
+            logger.warning("OTP attempt limit exceeded for %s", email)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many incorrect attempts. Request a new code.",
+            )
 
         expiry = token_doc["expiry"].replace(tzinfo=timezone.utc)
         if datetime.now(timezone.utc) > expiry:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP expired")
+
+        if not security.verify_password(otp, token_doc["otp_hash"]):
+            await db["forgot-password"].update_one(
+                {"_id": token_doc["_id"]}, {"$inc": {"attempts": 1}}
+            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP")
 
         await db["forgot-password"].update_one(
             {"_id": token_doc["_id"]}, {"$set": {"verified": True}}
@@ -219,6 +259,8 @@ async def forgot_password_verify_service(
         )
         logger.info("OTP verified for %s", email)
         return {"reset_token": token}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error in OTP verification for %s: %s", email, str(exc))
         raise
@@ -264,6 +306,8 @@ async def forgot_password_reset_service(
         )
         logger.info("Password reset completed for %s", email_or_username)
         return {"message": "Password reset successful"}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Error in forgot password reset: %s", str(exc))
         raise

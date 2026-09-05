@@ -1,7 +1,7 @@
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from fastapi import HTTPException, status
 import pandas as pd
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from src.services.google_service import fetch_form_responses
 from src import logger
 
@@ -87,14 +87,17 @@ async def update_or_create_job_metrics(
     try:
         job_id = str(job["_id"])
         deadline = job.get("application_deadline")
-        if deadline and deadline.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
-            return False   # Skip expired jobs
+        if deadline:
+            deadline_utc = deadline.replace(tzinfo=timezone.utc)
+            one_week_ago = datetime.now(timezone.utc) - timedelta(weeks=1)
+            if deadline_utc < one_week_ago:
+                return False
 
-        existing_metrics = await db.job_metrics.find_one({"job_id": job_id})
+        # existing_metrics = await db.job_metrics.find_one({"job_id": job_id})
 
-        if existing_metrics and deadline and deadline < datetime.now(timezone.utc):
-            logger.info("Skipped metrics update: deadline passed for job_id=%s", job_id)
-            return False
+        # if existing_metrics and deadline and deadline < datetime.now(timezone.utc):
+        #     logger.info("Skipped metrics update: deadline passed for job_id=%s", job_id)
+        #     return False
 
         metrics = await calculate_metrics(db, job_id, admin_doc)
 

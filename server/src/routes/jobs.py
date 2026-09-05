@@ -232,7 +232,7 @@ async def update_all_metrics(
 @router.put("/update/{job_id}", response_model=JobResponse)
 async def update_job(
     job_id: str,
-    payload: JobUpdate = Depends(),
+    payload: JobUpdate,
     db: AsyncIOMotorDatabase = Depends(get_database),
     current_user: dict = Depends(security.get_current_user),
 ):

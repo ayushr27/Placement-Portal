@@ -97,7 +97,7 @@ async def test_calculate_metrics_with_data(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_update_or_create_job_metrics_skip_deadline(monkeypatch):
-    job = FakeJob(deadline=datetime.now(timezone.utc) - timedelta(days=1), responses_sheet_link="dummy")
+    job = FakeJob(deadline=datetime.now(timezone.utc) - timedelta(weeks=1) - timedelta(days=1), responses_sheet_link="dummy")
     db = FakeDB([job])
 
     async def fake_calculate_metrics(*_):

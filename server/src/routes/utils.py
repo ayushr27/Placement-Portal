@@ -85,6 +85,7 @@ class Security:
         plain_password: str,
         hashed_password: str
     ) -> bool:
+        plain_password = plain_password.strip()
         try:
             return bcrypt.checkpw(
                 plain_password.encode("utf-8"),
