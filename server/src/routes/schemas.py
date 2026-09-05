@@ -275,19 +275,48 @@ class AdminEditStudentProfile(BaseModel):
     branch: Optional[str] = None
 
 
+# Fields a user must never be able to set on themselves.
+#
+# `role` used to be an editable field on StudentEditProfile. Combined with the
+# handler writing the whole model into $set, and get_current_user reading `role`
+# back off the stored document, any student could send role=admin and hold admin
+# privileges on their very next request - with the same, unchanged token, so
+# nothing in the logs showed an escalation. `username` and `email` are here
+# because get_user resolves students before admins, so a student who claimed an
+# admin's username would shadow that admin at login. `roll_number` identifies
+# the record being updated and is taken from the session, never the payload.
+IMMUTABLE_STUDENT_FIELDS = frozenset(
+    {
+        "role",
+        "username",
+        "email",
+        "roll_number",
+        "hashed_password",
+        "has_edited_profile",
+        "_id",
+        "id",
+    }
+)
+
+
 class StudentEditProfile(BaseModel):
+    """
+    Self-service profile edit payload.
+
+    Deliberately carries no `role`, `username`, `email` or `roll_number`: see
+    IMMUTABLE_STUDENT_FIELDS. Handlers must additionally filter against that set
+    so adding a field back here cannot silently reopen the escalation.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     profile_pic_link: Optional[str] = None
     name: Optional[str] = None
     gender: Optional[str] = None
-    email: EmailStr
     date_of_birth: Optional[datetime] = Field(
         None, description="Date of birth in format YYYY-MM-DD"
     )
     phone_no: Optional[str] = None
-    username: Optional[str] = Field(
-        None, min_length=3, max_length=50, description="Username will be used for login"
-    )
-    roll_number: str
     branch: Optional[str] = Field(
         None,
         min_length=2,
@@ -323,5 +352,4 @@ class StudentEditProfile(BaseModel):
     resume_link: Optional[str] = None
     aadhar_card_link: Optional[str] = None
     pan_card_link: Optional[str] = None
-    role: str = "student"
     career_path: Optional[str] = None

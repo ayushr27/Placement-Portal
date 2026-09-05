@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from src import logger
 from src.database import get_database
@@ -21,6 +21,23 @@ from src.services.jobs import check_and_update_jobs
 
 
 router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
+
+# Operational plumbing that students have no use for, and that identifies the
+# admin and their Google Sheets. `form_link` is deliberately NOT here: students
+# need it to apply.
+ADMIN_ONLY_JOB_FIELDS = (
+    "responses_sheet_link",
+    "master_sheet_id",
+    "master_sheet_link",
+    "created_by",
+)
+
+
+def redact_job_for(current_user: dict, job: dict) -> dict:
+    """Strip admin-only fields from a job unless the caller is an admin."""
+    if current_user.get("role") == "admin":
+        return job
+    return {k: v for k, v in job.items() if k not in ADMIN_ONLY_JOB_FIELDS}
 
 
 @router.post(
@@ -109,7 +126,23 @@ async def create_job(
 
 
 @router.post("/sync-expired")
-async def sync_expired_jobs(db: AsyncIOMotorDatabase = Depends(get_database)):
+async def sync_expired_jobs(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: dict = Depends(security.get_current_user),
+):
+    # This had no authentication at all: anyone on the internet could POST it,
+    # mutating jobs (synced=True) and driving Google Forms/Sheets calls on the
+    # admin's OAuth credentials. The admin UI sends a bearer token, so the gate
+    # looked present while being enforced only in the browser.
+    if current_user.get("role") != "admin":
+        logger.warning(
+            "Unauthorized job sync attempt by %s", current_user.get("username")
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can sync jobs",
+        )
+
     try:
         await check_and_update_jobs(db)
         return {"status": "ok", "message": "Expired jobs synced successfully"}
@@ -126,26 +159,45 @@ async def sync_expired_jobs(db: AsyncIOMotorDatabase = Depends(get_database)):
 @router.get("/get-jobs", response_model=List[JobResponse])
 async def get_all_jobs(
     db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: dict = Depends(security.get_current_user),
 ) -> List[JobResponse]:
+    # Was unauthenticated, so anyone could enumerate every posting along with
+    # the admin's email (created_by) and the internal sheet links.
     try:
         cached = cache_get("jobs:all")
         if cached:
-            return [JobResponse(**j) for j in cached]
+            return [
+                JobResponse(**redact_job_for(current_user, j)) for j in cached
+            ]
 
         jobs_cursor = db.jobs.find({})
         jobs: List[JobInDB] = []
         async for job in jobs_cursor:
             job["_id"] = str(job["_id"])
-            jobs.append(JobInDB(**job))
+            try:
+                jobs.append(JobInDB(**job))
+            except ValidationError as e:
+                # One legacy document missing a required field used to make this
+                # endpoint 500 for every user. Skip it and keep serving the rest.
+                logger.warning(
+                    "Skipping malformed job document %s: %s", job.get("_id"), e
+                )
 
-        jobs_response = [JobResponse(**j.model_dump()) for j in jobs]
-
+        # Cache the FULL documents under the shared key and redact per request.
+        # Caching the redacted view would poison the shared entry with whichever
+        # role happened to populate it first - a student's request would strip
+        # the sheet links for admins, and an admin's would expose them to
+        # students for the next hour.
+        full_response = [JobResponse(**j.model_dump()) for j in jobs]
         cache_set(
             "jobs:all",
-            [j.model_dump(mode="json") for j in jobs_response],
+            [j.model_dump(mode="json") for j in full_response],
             expire=3600,
         )
-        return jobs_response
+        return [
+            JobResponse(**redact_job_for(current_user, j.model_dump(mode="json")))
+            for j in full_response
+        ]
     except HTTPException:
         raise
     except Exception as e:
@@ -163,7 +215,17 @@ def serialize_for_cache(objects: List[BaseModel]):
 @router.get("/master-sheets", response_model=List[MasterSheetResponse])
 async def get_all_master_sheets(
     db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: dict = Depends(security.get_current_user),
 ) -> List[MasterSheetResponse]:
+    # Was unauthenticated: an anonymous GET returned every Google spreadsheet_id
+    # and admin_id. The sheets themselves are private, so this was ID disclosure
+    # rather than a data leak - but only until one sheet gets link-shared.
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can view master sheets",
+        )
+
     try:
         cached = cache_get("master_sheets:all")
         if cached:

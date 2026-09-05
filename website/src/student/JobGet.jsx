@@ -218,12 +218,21 @@ const JobGet = () => {
     const fetchJobs = async () => {
       try {
         setIsLoading(true);
-        const res = await axios.get(`${API_URL}/api/jobs/get-jobs`);
+        // This endpoint now requires authentication: it was previously public,
+        // which let anyone enumerate every posting along with the admin's email
+        // and the internal responses/master sheet links.
+        const res = await axios.get(`${API_URL}/api/jobs/get-jobs`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
         setJobs(Array.isArray(res.data) ? res.data : []);
         setIsLoading(false);
       } catch (err) {
         console.error(err);
-        toast.error("Failed to fetch jobs");
+        toast.error(
+          err.response?.status === 401
+            ? "Your session expired. Please log in again."
+            : "Failed to fetch jobs"
+        );
       } finally {
         setIsLoading(false);
       }

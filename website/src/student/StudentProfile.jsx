@@ -133,25 +133,52 @@ export default function Profile() {
         Object.entries(finalData).filter(([_, v]) => v !== "" && v !== null && v !== undefined)
       );
 
-      const queryParams = Object.entries(cleanedData)
-        .map(
-          ([key, value]) =>
-            `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
+      // Fields the server refuses to accept (extra="forbid"), because a student
+      // must not be able to set them on themselves. `role` in particular was
+      // how a student could make themselves an admin.
+      const SERVER_REJECTED_FIELDS = [
+        "role",
+        "username",
+        "email",
+        "roll_number",
+        "_id",
+        "id",
+        "hashed_password",
+        "has_edited_profile",
+      ];
+      const payload = Object.fromEntries(
+        Object.entries(cleanedData).filter(
+          ([key]) => !SERVER_REJECTED_FIELDS.includes(key)
         )
-        .join("&");
-
-      const response = await fetch(
-        API_URL + `/profile/student/update?${queryParams}`,
-        {
-          method: "PUT",
-          headers: {
-            accept: "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
       );
 
-      if (!response.ok) throw new Error("Update failed");
+      // Sent as a JSON body, not a query string. This used to build a URL out
+      // of the whole profile, putting date of birth, phone number, addresses
+      // and the Aadhaar/PAN links into access logs and browser history.
+      const response = await fetch(API_URL + "/profile/student/update", {
+        method: "PUT",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        // The server sends actionable messages here - notably "Profile can only
+        // be edited once. Contact Training and Placement Cell for further
+        // changes." Throwing a bare "Update failed" hid them.
+        const data = await response.json().catch(() => null);
+        const detail = data?.detail;
+        throw new Error(
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((d) => d.msg || String(d)).join(", ")
+              : "Profile update failed."
+        );
+      }
 
       const updated = await response.json();
       setProfile(updated);
@@ -163,7 +190,7 @@ export default function Profile() {
       setUploadedFields({});
     } catch (err) {
       console.error("Update error:", err);
-      showError("Profile update failed.", "Update Failed");
+      showError(err.message || "Profile update failed.", "Update Failed");
     }
   };
 

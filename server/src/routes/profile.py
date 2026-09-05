@@ -1,4 +1,6 @@
 
+import re
+
 from bson.regex import Regex
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -6,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from src.database import get_database
 from src.redis import cache_delete, cache_get, cache_set
 from src.routes.schemas import (
+    IMMUTABLE_STUDENT_FIELDS,
     StudentEditProfile,
     UserResponseAdmin,
     UserResponseStudent,
@@ -13,6 +16,47 @@ from src.routes.schemas import (
 from src.routes.utils import security
 
 router = APIRouter(prefix="/profile", tags=["Profiles"])
+
+
+def roll_number_filter(roll_number: str) -> dict:
+    """
+    Build a case-insensitive exact-match filter on roll_number.
+
+    The roll number was previously interpolated straight into a regex, so a
+    value of ".*" matched every student: GET /profile/admin/student/.* returned
+    an arbitrary student and the matching PUT updated one. A nested-quantifier
+    value also gave the database server catastrophic backtracking. re.escape
+    makes the value literal while keeping the case-insensitive matching that
+    existing stored roll numbers rely on.
+    """
+    return {"roll_number": Regex(f"^{re.escape(roll_number)}$", "i")}
+
+
+def profile_cache_key(roll_number: str) -> str:
+    """
+    Cache key for a student profile.
+
+    Lookups are case-insensitive, so `523cs0009` and `523CS0009` are the same
+    student but used to produce two different keys - an admin editing one
+    casing left the other cached and stale for an hour. Normalising here makes
+    writes and invalidations agree.
+    """
+    return f"profile:student:{(roll_number or '').casefold()}"
+
+
+def sanitize_student_update(update_data: dict) -> dict:
+    """
+    Drop fields a caller must never set, and fields they did not supply.
+
+    Defence in depth for the privilege escalation: even if a privileged field is
+    reintroduced to StudentEditProfile, it cannot reach $set from here. Dropping
+    None also stops an omitted field from overwriting stored data with null.
+    """
+    return {
+        key: value
+        for key, value in update_data.items()
+        if key not in IMMUTABLE_STUDENT_FIELDS and value is not None
+    }
 
 
 @router.get("/student/me", response_model=UserResponseStudent)
@@ -27,7 +71,7 @@ async def get_student_profile(current_user: dict = Depends(security.get_current_
             detail="Access denied: Only students can access this endpoint",
         )
 
-    cache_key = f"profile:student:{current_user.get('roll_number')}"
+    cache_key = profile_cache_key(current_user.get("roll_number"))
     cached = cache_get(cache_key)
     if cached:
         return cached
@@ -108,23 +152,19 @@ async def admin_update_student_profile(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
 
-    update_data = {
-        k: v for k, v in update.model_dump(exclude_unset=True).items() if v is not None
-    }
+    update_data = sanitize_student_update(update.model_dump(exclude_unset=True))
     if not update_data:
         raise HTTPException(status_code=400, detail="No valid fields to update")
 
     result = await db.students.update_one(
-        {"roll_number": Regex(f"^{roll_number}$", "i")}, {"$set": update_data}
+        roll_number_filter(roll_number), {"$set": update_data}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    cache_delete(f"profile:student:{roll_number}")
+    cache_delete(profile_cache_key(roll_number))
 
-    updated_student = await db.students.find_one(
-        {"roll_number": Regex(f"^{roll_number}$", "i")}
-    )
+    updated_student = await db.students.find_one(roll_number_filter(roll_number))
     profile_response = {
         "_id": str(updated_student["_id"]),
         "profile_pic_link": updated_student.get("profile_pic_link"),
@@ -159,19 +199,23 @@ async def admin_update_student_profile(
 
 @router.put("/student/update", response_model=UserResponseStudent)
 async def update_student_profile(
-    update: StudentEditProfile = Depends(),
+    update: StudentEditProfile,
     db: AsyncIOMotorDatabase = Depends(get_database),
     current_user: dict = Depends(security.get_current_user),
 ):
+    # `update` is a request body, not `= Depends()`. Under Depends() FastAPI
+    # binds every field as a query parameter, which put each student's date of
+    # birth, phone number, addresses and Aadhaar/PAN links into the request URL
+    # - and therefore into access logs and browser history. It also made
+    # exclude_unset useless, because FastAPI then constructs the model with
+    # every field explicitly set.
     if current_user.get("role") != "student":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
 
     roll_number = current_user.get("roll_number")
-    student = await db.students.find_one(
-        {"roll_number": Regex(f"^{roll_number}$", "i")}
-    )
+    student = await db.students.find_one(roll_number_filter(roll_number))
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
@@ -184,22 +228,21 @@ async def update_student_profile(
             ),
         )
 
-    update_data = update.model_dump(exclude_unset=True)
+    update_data = sanitize_student_update(update.model_dump(exclude_unset=True))
     if not update_data:
         raise HTTPException(status_code=400, detail="No valid fields to update")
 
+    # Set last, after sanitising, so it cannot be supplied by the caller.
     update_data["has_edited_profile"] = True
     result = await db.students.update_one(
-        {"roll_number": Regex(f"^{roll_number}$", "i")}, {"$set": update_data}
+        roll_number_filter(roll_number), {"$set": update_data}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    cache_delete(f"profile:student:{roll_number}")
+    cache_delete(profile_cache_key(roll_number))
 
-    updated_student = await db.students.find_one(
-        {"roll_number": Regex(f"^{roll_number}$", "i")}
-    )
+    updated_student = await db.students.find_one(roll_number_filter(roll_number))
     profile_response = {
         "_id": str(updated_student["_id"]),
         "profile_pic_link": updated_student.get("profile_pic_link"),
@@ -243,9 +286,7 @@ async def get_student_profile_by_admin(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
 
-    student = await db.students.find_one(
-        {"roll_number": Regex(f"^{roll_number}$", "i")}
-    )
+    student = await db.students.find_one(roll_number_filter(roll_number))
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 

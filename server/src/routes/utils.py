@@ -21,13 +21,24 @@ async def get_user_from_collection(db: AsyncIOMotorDatabase, username: str, role
     try:
         if role == "student":
             user = await db.students.find_one({"$or": [{"username": username}, {"email": username}]})
+            resolved_role = "student"
         elif role == "admin":
             user = await db.admins.find_one({"$or": [{"username": username}, {"email": username}]})
+            resolved_role = "admin"
         else:
             user = None
+            resolved_role = None
 
         if user:
             user["id"] = str(user["_id"])
+            # Authorization must follow the collection the user was found in,
+            # never the `role` field stored on the document. This function
+            # returned the document verbatim, so a student who had written
+            # role="admin" into their own record passed every
+            # `current_user.get("role") != "admin"` guard in the application -
+            # while their token still read "student", making the escalation
+            # invisible in logs. get_user (below) already normalises this way.
+            user["role"] = resolved_role
         return user
     except HTTPException:
         raise
