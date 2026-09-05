@@ -196,7 +196,10 @@ class JobInDB(JobCreate):
     created_by: str
     created_at: datetime = Field(default_factory=ist)
     updated_at: datetime = Field(default_factory=ist)
-    responses_sheet_link: str
+    # Optional: a job can be posted without an application form, in which case
+    # there is no responses sheet to link. The admin form marks the form link
+    # optional, so requiring it here rejected perfectly valid postings.
+    responses_sheet_link: Optional[str] = None
     master_sheet_id: str
     master_sheet_link: str
     synced: bool = False

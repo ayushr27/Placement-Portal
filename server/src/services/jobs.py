@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from typing import Optional
 
 import pytz
 import requests
@@ -323,18 +324,16 @@ async def create_job_with_links(
     db: AsyncIOMotorDatabase,
     current_admin_username: str,
     job_data: JobCreate,
-    responses_sheet_link: str,
+    responses_sheet_link: Optional[str] = None,
 ) -> JobResponse:
     """Create a job entry with associated Google Sheets links."""
-    if (
-        not job_data.job_designation
-        or not job_data.company_name
-        or not job_data.form_link
-    ):
+    # form_link is deliberately not required: the admin form marks it optional
+    # and a job can exist without an application form.
+    if not job_data.job_designation or not job_data.company_name:
         logger.error("Missing required job data: %s", job_data)
         raise HTTPException(
             status_code=400,
-            detail="Title, company, and form link are required",
+            detail="Job designation and company name are required",
         )
 
     admin_doc = await _get_admin_doc(db, current_admin_username)
@@ -363,8 +362,8 @@ async def create_job_with_links(
                         ",".join(str(b) for b in job_data.batch),
                         job_data.company_name,
                         job_data.job_designation,
-                        job_data.form_link,
-                        responses_sheet_link,
+                        job_data.form_link or "",
+                        responses_sheet_link or "",
                     ]
                 ]
             },
