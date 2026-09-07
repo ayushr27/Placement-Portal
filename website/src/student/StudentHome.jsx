@@ -5,9 +5,40 @@ import LogoNav from "../components/LogoNav";
 import JobGet from "./JobGet";
 import Sidebar from "../components/SideNav";
 import { API_URL } from "../../env-config";
-import { toast, ToastContainer } from "react-toastify";
+import { toast } from "react-toastify";
 import { Eye, EyeOff, Key, LogOut, User } from "lucide-react";
 import "../css/scroll.css";
+
+/**
+ * Turn a FastAPI error body into one sentence a student can act on.
+ *
+ * `detail` is a string for deliberate errors ("Old password incorrect") and an
+ * array of objects for schema validation failures. The old code rendered
+ * `await res.text()` directly, so a wrong password showed the raw
+ * `{"detail":"Old password incorrect"}` and a too-short one showed a
+ * 300-character validation blob.
+ */
+const describeError = (status, body) => {
+  const detail = body?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map((d) => {
+        const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : null;
+        const label =
+          field === "old_password"
+            ? "Old password"
+            : field === "new_password"
+              ? "New password"
+              : null;
+        const msg = (d.msg || "is invalid").replace(/^String should have/, "must have");
+        return label ? `${label} ${msg.charAt(0).toLowerCase()}${msg.slice(1)}` : msg;
+      })
+      .join(". ");
+  }
+  if (status === 401) return "Your session has expired. Please log in again.";
+  return "Password update failed. Please try again.";
+};
 
 const StudentHome = () => {
   const [showOld, setShowOld] = useState(false);
@@ -32,27 +63,51 @@ const StudentHome = () => {
 
 const handleSubmit = async (e) => {
   e.preventDefault();
+
+  // Validate before calling. Blank fields previously reached the API and came
+  // back as a 422 whose body was printed on screen verbatim.
+  const oldPassword = formData.old_password.trim();
+  const newPassword = formData.new_password.trim();
+
+  if (!oldPassword || !newPassword) {
+    toast.error("Please fill in both your current and new password.");
+    return;
+  }
+  if (newPassword.length < 6) {
+    toast.error("Your new password must be at least 6 characters long.");
+    return;
+  }
+  if (oldPassword === newPassword) {
+    toast.error("Your new password must be different from the current one.");
+    return;
+  }
+
   setLoading(true);
   try {
     const token = localStorage.getItem("token");
     const res = await fetch(`${API_URL}/api/auth/reset-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify(formData),
+      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
     });
 
+    const body = await res.json().catch(() => null);
+
     if (!res.ok) {
-      const errMsg = await res.text();
-      toast.error(errMsg || "Password update failed");
-      throw new Error(errMsg);
+      // Show the reason and stop. Throwing here previously fell through to the
+      // catch below, which stacked "Something went wrong. Try again" on top of
+      // the real message and buried it.
+      toast.error(describeError(res.status, body));
+      return;
     }
 
     toast.success("Password updated successfully");
     setIsModalOpen(false);
     setFormData({ old_password: "", new_password: "" });
   } catch (err) {
-    toast.error("Something went wrong. Try again");
-    console.error(err);
+    // Only a genuine network or parse failure reaches here now.
+    console.error("Password update failed:", err);
+    toast.error("Could not reach the server. Check your connection and try again.");
   } finally {
     setLoading(false);
   }
@@ -142,6 +197,7 @@ const handleSubmit = async (e) => {
                     <input
                       type={showOld ? "text" : "password"}
                       name="old_password"
+                      autoComplete="current-password"
                       value={formData.old_password}
                       onChange={handleChange}
                       placeholder="Enter your old password"
@@ -158,6 +214,7 @@ const handleSubmit = async (e) => {
                     <input
                       type={showNew ? "text" : "password"}
                       name="new_password"
+                      autoComplete="new-password"
                       value={formData.new_password}
                       onChange={handleChange}
                       placeholder="Enter a new password"
@@ -201,7 +258,9 @@ const handleSubmit = async (e) => {
         )}
       </AnimatePresence>
 
-      <ToastContainer position="top-right" autoClose={3000} />
+      {/* No ToastContainer here: main.jsx mounts one globally, and
+          react-toastify renders every toast into EVERY mounted container,
+          so a second one showed each message twice. */}
     </div>
   );
 };
