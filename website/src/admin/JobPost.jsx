@@ -191,12 +191,36 @@ const handleGetMetrics = async (jobId) => {
       }
     );
 
-    console.log("Metrics response:", res.data);
+    const { metrics, message } = res.data || {};
 
-    toast.success("Metrics fetched successfully!");
+    // Previously this only console.logged the payload and said "fetched
+    // successfully", so the admin saw nothing either way.
+    if (!metrics) {
+      toast.info(message || "No metrics available for this job yet.", {
+        autoClose: 8000,
+      });
+      return;
+    }
+
+    const summarise = (label, obj) => {
+      const entries = Object.entries(obj || {});
+      if (!entries.length) return null;
+      return `${label}: ${entries.map(([k, v]) => `${k} ${v}`).join(", ")}`;
+    };
+    const lines = [
+      summarise("Gender", metrics.gender_wise),
+      summarise("Branch", metrics.branch_wise),
+    ].filter(Boolean);
+
+    toast.success(lines.length ? lines.join(" | ") : "No applications recorded yet.", {
+      autoClose: 10000,
+    });
   } catch (err) {
     console.error("Error fetching metrics:", err);
-    toast.error("Failed to get metrics");
+    const detail = err.response?.data?.detail;
+    toast.error(
+      (typeof detail === "string" ? detail : null) || "Failed to get metrics"
+    );
   }
 };
 

@@ -292,13 +292,37 @@ async def get_job_metrics(
 
     try:
         metrics = await db.job_metrics.find_one({"job_id": jobid})
-        if not metrics:
+        if metrics:
+            metrics["_id"] = str(metrics["_id"])
+            metrics.setdefault("status", "ok")
+            return metrics
+
+        # A missing metrics document is the normal state, not an error: metrics
+        # are derived from a job's Google responses sheet, and a job posted
+        # without a form link can never have one. Returning a bare 404 made
+        # "Get Metrics" look broken on every such job - 7 of 8 here.
+        job = await db.jobs.find_one({"_id": jobid})
+        if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Metrics not found for this job",
+                detail="Job not found",
             )
-        metrics["_id"] = str(metrics["_id"])
-        return metrics
+
+        if not job.get("responses_sheet_link"):
+            message = (
+                "No metrics yet: this job has no linked Google Form responses "
+                "sheet, so there are no applications to count. Edit the job and "
+                "add the form's edit link to enable metrics."
+            )
+            state = "no_responses_sheet"
+        else:
+            message = (
+                "No metrics yet: the responses sheet has not been synced. "
+                "Use Sync, then try again."
+            )
+            state = "not_synced"
+
+        return {"job_id": jobid, "metrics": None, "status": state, "message": message}
     except HTTPException:
         raise
     except Exception as e:
