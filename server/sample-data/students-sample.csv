@@ -1,0 +1,13 @@
+name,email,roll_number,branch,batch,course,gender,phone_no
+Sneha Chandra,sneha.chandra@example.com,B23CS001,CSE,2026,B.Tech,Female,9836224336
+Aryan Kulkarni,aryan.kulkarni@example.com,B23EC002,ECE,2026,B.Tech,Male,9847191730
+Kavya Pillai,kavya.pillai@example.com,B23ME003,MECH,2026,B.Tech,Female,9828012713
+Nikhil Menon,nikhil.menon@example.com,B23EE004,EEE,2027,B.Tech,Male,9826410799
+Aditi Joshi,aditi.joshi@example.com,B23CE005,Civil,2027,B.Tech,Female,9867513203
+Siddharth Sethi,siddharth.sethi@example.com,B23AI006,AIDS,2027,B.Tech,Male,9891603320
+Priya Iyer,priya.iyer@example.com,B23CS007,CSE,2028,B.Tech,Female,9893771977
+Harsh Rao,harsh.rao@example.com,B23EC008,ECE,2028,B.Tech,Male,9865857084
+Neha Mishra,neha.mishra@example.com,B23ME009,MECH,2028,B.Tech,Female,9829517238
+Varun Reddy,varun.reddy@example.com,B23EE010,EEE,2029,B.Tech,Male,9856721030
+Shreya Gupta,shreya.gupta@example.com,B23CE011,Civil,2029,B.Tech,Female,9891258233
+Om Naidu,om.naidu@example.com,B23AI012,AIDS,2029,B.Tech,Male,9802232419
